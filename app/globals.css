@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -12,15 +12,82 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* SuperDoc Editor Styles */
+.superdoc-container {
+  --superdoc-bg: #ffffff;
+  --superdoc-text: #1f2937;
+}
+
+.superdoc-container .ProseMirror {
+  min-height: 500px;
+  padding: 2rem;
+  outline: none;
+}
+
+.superdoc-container .ProseMirror:focus {
+  outline: none;
+}
+
+/* Track Changes Styles */
+.superdoc-container .insertion {
+  background-color: rgba(34, 197, 94, 0.2);
+  text-decoration: underline;
+  text-decoration-color: #22c55e;
+}
+
+.superdoc-container .deletion {
+  background-color: rgba(239, 68, 68, 0.2);
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+}
+
+.superdoc-container .format-change {
+  background-color: rgba(234, 179, 8, 0.2);
+}
+
+/* Comments Styles */
+.superdoc-container .comment-mark {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-bottom: 2px solid #3b82f6;
+}
+
+.superdoc-container .comment-mark.active {
+  background-color: rgba(59, 130, 246, 0.3);
+}
+
+.superdoc-container .comment-mark.resolved {
+  background-color: rgba(156, 163, 175, 0.2);
+  border-bottom-color: #9ca3af;
+}
+
+/* Toolbar Styles */
+.superdoc-container .toolbar {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem;
+}
+
+/* Scrollbar Styles */
+.superdoc-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.superdoc-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.superdoc-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.superdoc-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
