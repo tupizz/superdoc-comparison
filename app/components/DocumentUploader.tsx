@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react'
 import type { DocumentUploaderProps } from '@/app/types'
 
-export default function DocumentUploader({ onUpload, disabled = false }: DocumentUploaderProps) {
+export default function DocumentUploader({ onUpload, disabled = false, label }: DocumentUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -80,7 +80,7 @@ export default function DocumentUploader({ onUpload, disabled = false }: Documen
       onDrop={handleDrop}
       className={`
         relative flex flex-col items-center justify-center
-        w-full max-w-2xl h-80 mx-auto
+        w-full h-64
         border-2 border-dashed rounded-xl
         transition-all duration-200 cursor-pointer
         ${isDragging
@@ -137,7 +137,7 @@ export default function DocumentUploader({ onUpload, disabled = false }: Documen
         ) : (
           <>
             <p className="text-lg text-gray-300 mb-2">
-              Drag-and-drop or upload DOCX
+              {label || 'Drag-and-drop or upload DOCX'}
             </p>
             <p className="text-sm text-gray-500">
               Click to browse or drop your file here

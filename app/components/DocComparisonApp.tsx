@@ -1,20 +1,15 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { DocumentTextIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import DocumentUploader from './DocumentUploader'
-import UploadNewVersion from './UploadNewVersion'
-import ChangeSummary from './ChangeSummary'
 import { Heading } from './catalyst/heading'
 import { Badge } from './catalyst/badge'
 import { Button } from './catalyst/button'
-import type { AppState, TrackedChange } from '@/app/types'
-import type { ChangeSummaryOutput } from '@/app/lib/openai'
-import type { DocumentEditorRef } from './DocumentEditor'
 
-// Dynamic import for SuperDoc editor to avoid SSR issues
-const DocumentEditor = dynamic(() => import('./DocumentEditor'), {
+// Dynamic import for DocumentComparison to avoid SSR issues
+const DocumentComparison = dynamic(() => import('./DocumentComparison'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-[600px] bg-zinc-800 rounded-lg flex items-center justify-center">
@@ -23,7 +18,7 @@ const DocumentEditor = dynamic(() => import('./DocumentEditor'), {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
-        <span className="text-zinc-400">Loading editor...</span>
+        <span className="text-zinc-400">Loading comparison view...</span>
       </div>
     </div>
   ),
@@ -35,223 +30,140 @@ interface DocumentVersion {
   name: string
 }
 
-interface SummaryState {
-  data: (ChangeSummaryOutput & { bulletPoints: string[] }) | null
-  loading: boolean
-  error: string | null
-}
-
 export default function DocComparisonApp() {
-  const [appState, setAppState] = useState<AppState>('upload')
   const [v1Document, setV1Document] = useState<DocumentVersion | null>(null)
   const [v2Document, setV2Document] = useState<DocumentVersion | null>(null)
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChange[]>([])
-  const [summary, setSummary] = useState<SummaryState>({
-    data: null,
-    loading: false,
-    error: null,
-  })
-  const [showSummary, setShowSummary] = useState(false)
 
-  const editorRef = useRef<DocumentEditorRef>(null)
+  const isComparing = v1Document && v2Document
 
-  // Handle V1 document upload
   const handleV1Upload = useCallback((file: File, base64: string) => {
-    setV1Document({
-      file,
-      base64,
-      name: file.name,
-    })
-    setAppState('viewing')
-    // Reset any previous comparison state
-    setV2Document(null)
-    setTrackedChanges([])
-    setSummary({ data: null, loading: false, error: null })
-    setShowSummary(false)
+    setV1Document({ file, base64, name: file.name })
   }, [])
 
-  // Handle V2 document upload for comparison
-  const handleV2Upload = useCallback(async (file: File, base64: string) => {
-    setV2Document({
-      file,
-      base64,
-      name: file.name,
-    })
-    setAppState('comparing')
-
-    // Load the new document into the editor
-    if (editorRef.current) {
-      await editorRef.current.loadNewDocument(base64)
-    }
-
-    // Generate AI summary
-    setSummary({ data: null, loading: true, error: null })
-    setShowSummary(true)
-
-    try {
-      // For demo purposes, we'll create some mock changes
-      // In production, these would come from the actual document comparison
-      const mockChanges = [
-        { type: 'insertion', content: 'New content added to the document' },
-        { type: 'deletion', content: 'Old content that was removed' },
-        { type: 'format', content: 'Title formatting changed to bold' },
-      ]
-
-      const response = await fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changes: mockChanges,
-          documentName: file.name,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to generate summary')
-      }
-
-      const data = await response.json()
-      setSummary({
-        data,
-        loading: false,
-        error: null,
-      })
-    } catch (error) {
-      console.error('Error generating summary:', error)
-      setSummary({
-        data: null,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to generate summary',
-      })
-    }
+  const handleV2Upload = useCallback((file: File, base64: string) => {
+    setV2Document({ file, base64, name: file.name })
   }, [])
 
-  // Handle tracked changes from editor
-  const handleChangesDetected = useCallback((changes: TrackedChange[]) => {
-    setTrackedChanges(changes)
-  }, [])
-
-  // Reset to initial state
   const handleReset = useCallback(() => {
-    setAppState('upload')
     setV1Document(null)
     setV2Document(null)
-    setTrackedChanges([])
-    setSummary({ data: null, loading: false, error: null })
-    setShowSummary(false)
-  }, [])
-
-  // Close summary panel
-  const handleCloseSummary = useCallback(() => {
-    setShowSummary(false)
   }, [])
 
   return (
     <div className="min-h-screen bg-zinc-950">
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <DocumentTextIcon className="h-8 w-8 text-blue-500" />
             <Heading level={1} className="!text-xl !sm:text-xl">
               DOCX Comparison Engine
             </Heading>
-            {appState !== 'upload' && (
-              <Badge color={appState === 'comparing' ? 'green' : 'zinc'}>
-                {appState === 'viewing' ? 'Viewing' : 'Comparing'}
-              </Badge>
+            {isComparing && (
+              <Badge color="green">Comparing</Badge>
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            {appState !== 'upload' && (
-              <>
-                {v1Document && (
-                  <span className="text-sm text-zinc-400">
-                    {v1Document.name}
-                    {v2Document && (
-                      <span className="text-zinc-600"> → {v2Document.name}</span>
-                    )}
-                  </span>
-                )}
-                <Button outline onClick={handleReset}>
-                  <ArrowPathIcon className="h-4 w-4" data-slot="icon" />
-                  Start Over
-                </Button>
-              </>
-            )}
-            {appState === 'viewing' && (
-              <UploadNewVersion onUpload={handleV2Upload} />
-            )}
-            {appState === 'comparing' && (
-              <UploadNewVersion onUpload={handleV2Upload} />
+            {(v1Document || v2Document) && (
+              <Button outline onClick={handleReset}>
+                <ArrowPathIcon className="h-4 w-4" data-slot="icon" />
+                Start Over
+              </Button>
             )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {appState === 'upload' && (
+      <main className="max-w-[1800px] mx-auto px-4 py-6">
+        {/* Upload State - Two documents required */}
+        {!isComparing && (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="text-center mb-8">
               <Heading level={2} className="!text-3xl mb-2">
-                Upload your DOCX document
+                Compare DOCX Documents
               </Heading>
               <p className="text-zinc-400">
-                Upload the first version of your document to get started
+                Upload two versions of your document to see the differences
               </p>
             </div>
-            <DocumentUploader onUpload={handleV1Upload} />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+              {/* Original Document */}
+              <div className="flex flex-col">
+                <div className="text-center mb-3">
+                  <span className="text-sm font-medium text-zinc-300">Original Version</span>
+                </div>
+                {v1Document ? (
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-6 text-center">
+                    <DocumentTextIcon className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                    <p className="text-zinc-200 font-medium truncate">{v1Document.name}</p>
+                    <p className="text-zinc-500 text-sm mt-1">Ready</p>
+                    <Button
+                      outline
+                      className="mt-4"
+                      onClick={() => setV1Document(null)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <DocumentUploader onUpload={handleV1Upload} label="Drop original document" />
+                )}
+              </div>
+
+              {/* Modified Document */}
+              <div className="flex flex-col">
+                <div className="text-center mb-3">
+                  <span className="text-sm font-medium text-zinc-300">Modified Version</span>
+                </div>
+                {v2Document ? (
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-6 text-center">
+                    <DocumentTextIcon className="h-12 w-12 text-blue-500 mx-auto mb-3" />
+                    <p className="text-zinc-200 font-medium truncate">{v2Document.name}</p>
+                    <p className="text-zinc-500 text-sm mt-1">Ready</p>
+                    <Button
+                      outline
+                      className="mt-4"
+                      onClick={() => setV2Document(null)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <DocumentUploader onUpload={handleV2Upload} label="Drop modified document" />
+                )}
+              </div>
+            </div>
+
+            {/* Status message */}
+            <div className="mt-8 text-center">
+              {!v1Document && !v2Document && (
+                <p className="text-zinc-500">Upload both documents to start comparison</p>
+              )}
+              {v1Document && !v2Document && (
+                <p className="text-zinc-400">Now upload the modified version</p>
+              )}
+              {!v1Document && v2Document && (
+                <p className="text-zinc-400">Now upload the original version</p>
+              )}
+            </div>
           </div>
         )}
 
-        {(appState === 'viewing' || appState === 'comparing') && v1Document && (
-          <div className="space-y-4">
-            {/* Document info bar */}
-            {appState === 'comparing' && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <Badge color="green">Comparing</Badge>
-                  <span className="text-zinc-300">
-                    Showing changes between <strong>{v1Document.name}</strong> and{' '}
-                    <strong>{v2Document?.name}</strong>
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Editor */}
-            <div className="rounded-lg overflow-hidden border border-zinc-800">
-              <DocumentEditor
-                ref={editorRef}
-                document={appState === 'comparing' && v2Document ? v2Document.base64 : v1Document.base64}
-                documentName={appState === 'comparing' && v2Document ? v2Document.name : v1Document.name}
-                onChangesDetected={handleChangesDetected}
-              />
-            </div>
-
-            {/* Instructions when viewing V1 */}
-            {appState === 'viewing' && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-center">
-                <p className="text-zinc-400">
-                  Your document is loaded. Make edits in MS Word Desktop, then upload the new version to compare changes.
-                </p>
-              </div>
-            )}
+        {/* Comparing State - Side by Side */}
+        {isComparing && (
+          <div className="h-[calc(100vh-160px)]">
+            <DocumentComparison
+              originalBase64={v1Document.base64}
+              modifiedBase64={v2Document.base64}
+              originalName={v1Document.name}
+              modifiedName={v2Document.name}
+            />
           </div>
         )}
       </main>
-
-      {/* Change Summary Panel */}
-      {showSummary && (
-        <ChangeSummary
-          summary={summary.data!}
-          loading={summary.loading}
-          error={summary.error}
-          onClose={handleCloseSummary}
-        />
-      )}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { ArrowUpTrayIcon } from '@heroicons/react/20/solid'
 import { Button } from './catalyst/button'
 import type { UploadNewVersionProps } from '@/app/types'
 
-export default function UploadNewVersion({ onUpload, disabled = false }: UploadNewVersionProps) {
+export default function UploadNewVersion({ onUpload, disabled = false, label = 'Upload new version' }: UploadNewVersionProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
   const processFile = useCallback(async (file: File) => {
@@ -82,7 +82,7 @@ export default function UploadNewVersion({ onUpload, disabled = false }: UploadN
         ) : (
           <>
             <ArrowUpTrayIcon data-slot="icon" />
-            Upload new version
+            {label}
           </>
         )}
       </Button>

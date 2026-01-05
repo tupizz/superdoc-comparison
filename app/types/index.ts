@@ -42,6 +42,7 @@ export interface SuperDocInstance {
 export interface DocumentUploaderProps {
   onUpload: (file: File, base64: string) => void
   disabled?: boolean
+  label?: string
 }
 
 export interface DocumentEditorProps {
@@ -58,4 +59,5 @@ export interface ChangeSummaryProps {
 export interface UploadNewVersionProps {
   onUpload: (file: File, base64: string) => void
   disabled?: boolean
+  label?: string
 }
