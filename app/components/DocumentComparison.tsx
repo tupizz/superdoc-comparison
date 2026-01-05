@@ -176,8 +176,11 @@ export default function DocumentComparison({
         name: "Tadeu Tupinamba",
         email: "tadeu.tupiz@gmail.com",
       },
+      rulers: true,
+      documentMode: "editing",
       // Enable modules
       modules: {
+        comments: {},
         toolbar: {
           selector: "#superdoc-toolbar",
           groups: {
@@ -191,17 +194,20 @@ export default function DocumentComparison({
               "color",
               "highlight",
             ],
+            right: ["documentMode"],
           },
         },
       },
-      // Enable pagination for multi-page documents
-      documentMode: "editing",
+      // Event handlers
       onReady: () => {
         if (!mounted) return;
         modifiedJson =
           mainSuperdoc?.activeEditor?.getJSON() as ProseMirrorJsonNode;
         superdocRef.current = mainSuperdoc;
         onBothLoaded();
+      },
+      onContentError: ({ error, documentId }) => {
+        console.error(`Error loading document ${documentId}:`, error);
       },
     });
 
@@ -264,9 +270,9 @@ export default function DocumentComparison({
         {/* Toolbar container */}
         <div
           id="superdoc-toolbar"
-          className="bg-gray-100 border-b border-gray-200 px-2 py-1"
+          className="border-b border-zinc-700 px-2 py-1"
         />
-        <div className="flex-1 bg-white rounded-b-lg overflow-auto relative">
+        <div className="flex-1 bg-gray-100 rounded-b-lg overflow-auto relative">
           {isLoading && <LoadingOverlay />}
           <div id="superdoc-main" className="w-full h-full" />
         </div>

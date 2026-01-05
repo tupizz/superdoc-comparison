@@ -17,3 +17,292 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =============================================================================
+   SuperDoc Theme Overrides
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Toolbar Styling (Dark)
+   ----------------------------------------------------------------------------- */
+
+
+
+
+#superdoc-toolbar,
+.superdoc-toolbar,
+.sd-toolbar {
+  background: #27272a !important;
+  border-color: #3f3f46 !important;
+}
+
+#superdoc-toolbar .toolbar,
+.superdoc-toolbar .toolbar {
+  background: #27272a !important;
+}
+
+/* Toolbar buttons */
+#superdoc-toolbar button,
+#superdoc-toolbar .n-button,
+.superdoc-toolbar button,
+.superdoc-toolbar svg {
+  color: #e4e4e7 !important;
+  fill: #e4e4e7 !important;
+}
+
+#superdoc-toolbar button:hover,
+#superdoc-toolbar .n-button:hover,
+.superdoc-toolbar button:hover {
+  background: #3f3f46 !important;
+}
+
+/* Toolbar dropdowns (Naive UI components) */
+#superdoc-toolbar select,
+#superdoc-toolbar .n-select,
+#superdoc-toolbar .n-base-selection,
+.superdoc-toolbar select {
+  background: #3f3f46 !important;
+  color: #e4e4e7 !important;
+  border-color: #52525b !important;
+}
+
+#superdoc-toolbar .n-base-selection-label {
+  color: #e4e4e7 !important;
+}
+
+/* Toolbar text inputs (font size, etc.) */
+#superdoc-toolbar .button-text-input,
+.superdoc-toolbar .button-text-input {
+  background: #3f3f46 !important;
+  color: #e4e4e7 !important;
+  border-color: #52525b !important;
+}
+
+#superdoc-toolbar .button-label,
+.superdoc-toolbar .button-label {
+  color: #e4e4e7 !important;
+}
+
+/* Comment bubble tool icon */
+.superdoc__tools-icon svg {
+  fill: #6b7280 !important;
+}
+
+.superdoc__tools-icon:hover svg {
+  fill: #2563eb !important;
+}
+
+#superdoc-toolbar .toolbar-divider,
+.superdoc-toolbar .toolbar-divider {
+  background: #52525b !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Page Separator (Pagination)
+   ----------------------------------------------------------------------------- */
+
+.sd-page-separator,
+.super-editor-page-separator,
+.sd-editor-separator {
+  background: #27272a !important;
+}
+
+/* -----------------------------------------------------------------------------
+   SD Buttons
+   ----------------------------------------------------------------------------- */
+
+.sd-button {
+  background-color: #3f3f46 !important;
+  border-color: #52525b !important;
+  color: #e4e4e7 !important;
+}
+
+.sd-button:hover {
+  background-color: #52525b !important;
+}
+
+.sd-button.primary {
+  background-color: #2563eb !important;
+  color: white !important;
+  border: none !important;
+}
+
+.sd-button.primary:hover {
+  background-color: #1d4ed8 !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Track Changes Styling (Enhanced)
+   ----------------------------------------------------------------------------- */
+
+/* Insertions - Green */
+.track-insert-dec.highlighted {
+  border-top: 1px dashed #22c55e !important;
+  border-bottom: 1px dashed #22c55e !important;
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+
+/* Deletions - Red with strikethrough */
+.track-delete-dec.highlighted {
+  border-top: 1px dashed #ef4444 !important;
+  border-bottom: 1px dashed #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  text-decoration: line-through !important;
+  text-decoration-thickness: 2px !important;
+}
+
+/* Format changes - Gold */
+.track-format-dec.highlighted {
+  border-bottom: 2px solid #eab308 !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Comments Styling
+   ----------------------------------------------------------------------------- */
+
+/* Comment highlight in document */
+.sd-editor-comment-highlight,
+.superdoc-comment-highlight {
+  background-color: rgba(234, 179, 8, 0.25) !important;
+  transition: background-color 250ms ease;
+}
+
+.sd-editor-comment-highlight:hover,
+.superdoc-comment-highlight:hover {
+  background-color: rgba(234, 179, 8, 0.4) !important;
+}
+
+.sd-editor-comment-highlight.sd-custom-selection,
+.superdoc-comment-highlight.sd-custom-selection {
+  background-color: rgba(234, 179, 8, 0.5) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Comments Dialog - Minimal overrides for visibility
+   ----------------------------------------------------------------------------- */
+
+/* Text colors inside comments dialog */
+.comments-dialog .user-name {
+  color: #18181b !important;
+}
+
+.comments-dialog .user-timestamp {
+  color: #71717a !important;
+}
+
+.comments-dialog .comment-body .comment,
+.comments-dialog .comment-body .comment p,
+.comments-dialog .comment-body .comment span {
+  color: #27272a !important;
+}
+
+/* Input field - override dark theme */
+.comments-dialog .superdoc-field {
+  background: #f4f4f5 !important;
+  border: 1px solid #d4d4d8 !important;
+  color: #27272a !important;
+}
+
+.comments-dialog .superdoc-field .ProseMirror {
+  color: #27272a !important;
+}
+
+/* Buttons - override dark theme */
+.comments-dialog .sd-button {
+  background: #f4f4f5 !important;
+  color: #27272a !important;
+  border: 1px solid #d4d4d8 !important;
+}
+
+.comments-dialog .sd-button.primary {
+  background: #2563eb !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Popover Styling
+   ----------------------------------------------------------------------------- */
+
+.sd-editor-popover,
+.tippy-box[data-theme~='sd-editor-popover'] {
+  background-color: #27272a !important;
+  color: #e4e4e7 !important;
+  border-radius: 8px;
+  box-shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.3);
+}
+
+.tippy-arrow {
+  color: #27272a !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Page Numbers
+   ----------------------------------------------------------------------------- */
+
+.sd-editor-auto-page-number,
+.sd-editor-auto-total-pages {
+  color: #71717a !important;
+  border-bottom-color: #71717a !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Editor Scrollbar (Dark)
+   ----------------------------------------------------------------------------- */
+
+.superdoc::-webkit-scrollbar,
+#superdoc-main::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.superdoc::-webkit-scrollbar-track,
+#superdoc-main::-webkit-scrollbar-track {
+  background: #27272a;
+}
+
+.superdoc::-webkit-scrollbar-thumb,
+#superdoc-main::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-radius: 4px;
+}
+
+.superdoc::-webkit-scrollbar-thumb:hover,
+#superdoc-main::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
+/* -----------------------------------------------------------------------------
+   Disabled States
+   ----------------------------------------------------------------------------- */
+
+.superdoc .disabled,
+.super-editor .disabled,
+.superdoc-toolbar .disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Form Fields
+   ----------------------------------------------------------------------------- */
+
+.superdoc-field {
+  background: #3f3f46 !important;
+  border-color: #52525b !important;
+  color: #e4e4e7 !important;
+}
+
+.superdoc-field:focus,
+.superdoc-field:active {
+  border-color: #2563eb !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Placeholder Text
+   ----------------------------------------------------------------------------- */
+
+.sd-editor-placeholder::before {
+  color: #71717a !important;
+}
