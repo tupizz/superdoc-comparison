@@ -96,11 +96,13 @@ export {
   addCommentsToChanges,
   applyTrackChanges,
   applyTrackChangesForSuggesting,
+  approveChange,
   buildModifications,
   COMPARISON_USER,
   createTrackDeleteMark,
   createTrackInsertMark,
   getFormattingMarks,
   navigateToChange,
+  rejectChange,
   sortModificationsForApplication,
 } from "./track-changes";

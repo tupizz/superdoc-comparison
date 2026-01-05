@@ -4,12 +4,15 @@ import { SuperDoc } from "@harbour-enterprises/superdoc";
 import "@harbour-enterprises/superdoc/style.css";
 
 import {
+  addCommentsToChanges,
   applyTrackChanges,
+  approveChange,
   computeChangesWithPositions,
   computeDiffSummary,
   extractTextFromJson,
   extractTextWithPositions,
   navigateToChange,
+  rejectChange,
   type ChangeWithPosition,
   type DiffSummary,
   type PositionMap,
@@ -59,6 +62,9 @@ export default function DocumentComparison({
   const [isLoading, setIsLoading] = useState(true);
   const [changes, setChanges] = useState<ChangeWithPosition[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reviewedChanges, setReviewedChanges] = useState<
+    Record<string, "approved" | "rejected">
+  >({});
 
   const summary: DiffSummary = computeDiffSummary(changes);
 
@@ -91,6 +97,36 @@ export default function DocumentComparison({
 
     setSelectedId(change.id);
     navigateToChange(editor, change);
+  }, []);
+
+  // Handle approving a change
+  const handleApprove = useCallback((changeId: string) => {
+    if (!superdocRef.current) return;
+
+    const editor = superdocRef.current.activeEditor as unknown as
+      | SuperDocEditor
+      | undefined;
+    if (!editor) return;
+
+    const success = approveChange(editor, changeId);
+    if (success) {
+      setReviewedChanges((prev) => ({ ...prev, [changeId]: "approved" }));
+    }
+  }, []);
+
+  // Handle rejecting a change
+  const handleReject = useCallback((changeId: string) => {
+    if (!superdocRef.current) return;
+
+    const editor = superdocRef.current.activeEditor as unknown as
+      | SuperDocEditor
+      | undefined;
+    if (!editor) return;
+
+    const success = rejectChange(editor, changeId);
+    if (success) {
+      setReviewedChanges((prev) => ({ ...prev, [changeId]: "rejected" }));
+    }
   }, []);
 
   // Main effect: Initialize SuperDoc instances and apply track changes
@@ -142,19 +178,31 @@ export default function DocumentComparison({
         setTimeout(() => {
           if (!superdocRef.current?.activeEditor || !mounted) return;
 
-          const result = applyTrackChanges(
-            superdocRef.current.activeEditor as unknown as SuperDocEditor,
-            computed,
-            modifiedPosMap
-          );
+          const currentEditor =
+            superdocRef.current.activeEditor as unknown as SuperDocEditor;
+
+          const result = applyTrackChanges(currentEditor, computed, modifiedPosMap);
 
           // Re-extract position map AFTER track changes applied
           // (deletions insert text, changing positions)
-          const updatedPosMap = extractTextWithPositions(
-            superdocRef.current.activeEditor as unknown as SuperDocEditor
-          );
+          const updatedPosMap = extractTextWithPositions(currentEditor);
           posMapRef.current = updatedPosMap;
           console.log("Position map updated after track changes");
+
+          // Add comments to each change for review
+          setTimeout(() => {
+            if (!superdocRef.current?.activeEditor || !mounted) return;
+
+            const commentResult = addCommentsToChanges(
+              superdocRef.current.activeEditor as unknown as SuperDocEditor,
+              computed,
+              "Document Comparison",
+              "comparison@system"
+            );
+            console.log(
+              `Comments added: ${commentResult.successCount}/${commentResult.totalCount}`
+            );
+          }, 200);
         }, 300);
       }
     };
@@ -283,7 +331,10 @@ export default function DocumentComparison({
         changes={changes}
         selectedId={selectedId}
         isLoading={isLoading}
+        reviewedChanges={reviewedChanges}
         onSelectChange={handleNavigateToChange}
+        onApprove={handleApprove}
+        onReject={handleReject}
       />
     </div>
   );
@@ -351,21 +402,41 @@ interface ChangesSidebarProps {
   changes: ChangeWithPosition[];
   selectedId: string | null;
   isLoading: boolean;
+  reviewedChanges: Record<string, "approved" | "rejected">;
   onSelectChange: (change: ChangeWithPosition) => void;
+  onApprove: (changeId: string) => void;
+  onReject: (changeId: string) => void;
 }
 
 function ChangesSidebar({
   changes,
   selectedId,
   isLoading,
+  reviewedChanges,
   onSelectChange,
+  onApprove,
+  onReject,
 }: ChangesSidebarProps) {
+  const reviewedCount = Object.keys(reviewedChanges).length;
+  const approvedCount = Object.values(reviewedChanges).filter(
+    (s) => s === "approved"
+  ).length;
+  const rejectedCount = Object.values(reviewedChanges).filter(
+    (s) => s === "rejected"
+  ).length;
+
   return (
     <div className="w-72 flex flex-col bg-zinc-900 rounded-lg border border-zinc-800">
       <div className="px-4 py-3 border-b border-zinc-800">
         <h3 className="text-sm font-medium text-zinc-200">
           Changes {!isLoading && `(${changes.length})`}
         </h3>
+        {reviewedCount > 0 && (
+          <div className="mt-1 flex gap-2 text-xs">
+            <span className="text-green-400">{approvedCount} approved</span>
+            <span className="text-red-400">{rejectedCount} rejected</span>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {isLoading && (
@@ -380,7 +451,10 @@ function ChangesSidebar({
             change={change}
             index={index}
             isSelected={selectedId === change.id}
+            reviewStatus={reviewedChanges[change.id]}
             onSelect={() => onSelectChange(change)}
+            onApprove={() => onApprove(change.id)}
+            onReject={() => onReject(change.id)}
           />
         ))}
       </div>
@@ -392,36 +466,104 @@ interface ChangeCardProps {
   change: ChangeWithPosition;
   index: number;
   isSelected: boolean;
+  reviewStatus?: "approved" | "rejected";
   onSelect: () => void;
+  onApprove: () => void;
+  onReject: () => void;
 }
 
-function ChangeCard({ change, index, isSelected, onSelect }: ChangeCardProps) {
+function ChangeCard({
+  change,
+  index,
+  isSelected,
+  reviewStatus,
+  onSelect,
+  onApprove,
+  onReject,
+}: ChangeCardProps) {
   const isDeletion = change.type === "deletion";
+  const isReviewed = !!reviewStatus;
 
   return (
-    <button
-      onClick={onSelect}
+    <div
       className={`w-full text-left p-3 rounded-lg transition-colors ${
         isSelected
           ? "bg-zinc-700 ring-1 ring-blue-500"
           : "bg-zinc-800 hover:bg-zinc-700"
-      } ${isDeletion ? "cursor-default opacity-80" : "cursor-pointer"}`}
-      title={
-        isDeletion ? "Deleted text (shown in document)" : "Click to navigate"
-      }
+      } ${isDeletion ? "opacity-80" : ""} ${
+        reviewStatus === "approved"
+          ? "border-l-2 border-green-500"
+          : reviewStatus === "rejected"
+            ? "border-l-2 border-red-500"
+            : ""
+      }`}
     >
-      <ChangeCardHeader type={change.type} index={index} />
-      <ChangeCardContent change={change} />
-    </button>
+      <button
+        onClick={onSelect}
+        className="w-full text-left"
+        title={
+          isDeletion ? "Deleted text (shown in document)" : "Click to navigate"
+        }
+      >
+        <ChangeCardHeader
+          type={change.type}
+          index={index}
+          reviewStatus={reviewStatus}
+        />
+        <ChangeCardContent change={change} />
+      </button>
+
+      {/* Approve/Reject buttons */}
+      {!isReviewed && (
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onApprove();
+            }}
+            className="flex-1 px-2 py-1 text-xs font-medium bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded transition-colors"
+            title="Approve this change"
+          >
+            Approve
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onReject();
+            }}
+            className="flex-1 px-2 py-1 text-xs font-medium bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded transition-colors"
+            title="Reject this change"
+          >
+            Reject
+          </button>
+        </div>
+      )}
+
+      {/* Show review status */}
+      {isReviewed && (
+        <div className="mt-2 text-xs text-center">
+          {reviewStatus === "approved" ? (
+            <span className="text-green-400">Approved</span>
+          ) : (
+            <span className="text-red-400">Rejected</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 interface ChangeCardHeaderProps {
   type: ChangeWithPosition["type"];
   index: number;
+  reviewStatus?: "approved" | "rejected";
 }
 
-function ChangeCardHeader({ type, index }: ChangeCardHeaderProps) {
+function ChangeCardHeader({
+  type,
+  index,
+  reviewStatus,
+}: ChangeCardHeaderProps) {
   const config = {
     insertion: {
       bgClass: "bg-green-500/20",
@@ -451,6 +593,15 @@ function ChangeCardHeader({ type, index }: ChangeCardHeaderProps) {
         {config.symbol} {index + 1}
       </span>
       <span className="text-xs text-zinc-500">{config.label}</span>
+      {reviewStatus && (
+        <span
+          className={`ml-auto text-xs ${
+            reviewStatus === "approved" ? "text-green-400" : "text-red-400"
+          }`}
+        >
+          {reviewStatus === "approved" ? "✓" : "✗"}
+        </span>
+      )}
     </div>
   );
 }

@@ -4,8 +4,17 @@
  * Functions for applying track change marks (insertions, deletions) to ProseMirror documents.
  */
 
-import type { Node as PMNode, Mark as PMMark, MarkType, Schema } from "prosemirror-model";
+import type {
+  MarkType,
+  Mark as PMMark,
+  Node as PMNode,
+  Schema,
+} from "prosemirror-model";
 import type { Transaction } from "prosemirror-state";
+import {
+  getDeletionSearchContext,
+  hasSufficientContext,
+} from "./diff-computation";
 import type {
   ChangeWithPosition,
   DocumentModification,
@@ -14,7 +23,6 @@ import type {
   TrackChangeUser,
   TrackChangesResult,
 } from "./types";
-import { getDeletionSearchContext, hasSufficientContext } from "./diff-computation";
 
 /**
  * Track change mark names in SuperDoc schema
@@ -92,7 +100,9 @@ function mapInsertionOrReplacement(
   const pmTo = posMap.charToPos[change.charEnd! - 1];
 
   if (pmFrom === undefined || pmTo === undefined) {
-    console.warn(`Position mapping failed for "${change.content.substring(0, 30)}..."`);
+    console.warn(
+      `Position mapping failed for "${change.content.substring(0, 30)}..."`
+    );
     return null;
   }
 
@@ -115,7 +125,9 @@ function mapDeletion(
   if (hasSufficientContext(change)) {
     const searchContext = getDeletionSearchContext(change);
     if (searchContext) {
-      const searchResults = editor.commands.search(searchContext, { highlight: false });
+      const searchResults = editor.commands.search(searchContext, {
+        highlight: false,
+      });
 
       if (searchResults && searchResults.length > 0) {
         const firstResult = searchResults[0];
@@ -152,7 +164,9 @@ function mapDeletion(
     }
   }
 
-  console.warn(`Failed to map deletion "${change.content.substring(0, 30)}..."`);
+  console.warn(
+    `Failed to map deletion "${change.content.substring(0, 30)}..."`
+  );
   return null;
 }
 
@@ -204,9 +218,11 @@ export function getFormattingMarks(
 /**
  * Get marks from a resolved position, trying nodeBefore, then nodeAfter, then position marks
  */
-function getMarksFromResolvedPos(
-  $pos: { nodeBefore: PMNode | null; nodeAfter: PMNode | null; marks(): readonly PMMark[] }
-): readonly PMMark[] {
+function getMarksFromResolvedPos($pos: {
+  nodeBefore: PMNode | null;
+  nodeAfter: PMNode | null;
+  marks(): readonly PMMark[];
+}): readonly PMMark[] {
   if ($pos.nodeBefore && $pos.nodeBefore.isText) {
     return $pos.nodeBefore.marks;
   }
@@ -223,7 +239,10 @@ function getMarksFromResolvedPos(
  */
 function filterOutTrackMarks(marks: readonly PMMark[]): readonly PMMark[] {
   return marks.filter(
-    (m) => !TRACK_MARK_NAMES.includes(m.type.name as (typeof TRACK_MARK_NAMES)[number])
+    (m) =>
+      !TRACK_MARK_NAMES.includes(
+        m.type.name as (typeof TRACK_MARK_NAMES)[number]
+      )
   );
 }
 
@@ -285,7 +304,11 @@ export function applyTrackChanges(
 
   if (!trackInsertMark || !trackDeleteMark) {
     console.warn("Track change marks not available in schema");
-    return { successCount: 0, totalCount: changes.length, errors: ["Schema missing track marks"] };
+    return {
+      successCount: 0,
+      totalCount: changes.length,
+      errors: ["Schema missing track marks"],
+    };
   }
 
   // Build and sort modifications
@@ -300,7 +323,15 @@ export function applyTrackChanges(
 
   for (const mod of sortedMods) {
     try {
-      tr = applyModification(tr, mod, schema, trackInsertMark, trackDeleteMark, user, now);
+      tr = applyModification(
+        tr,
+        mod,
+        schema,
+        trackInsertMark,
+        trackDeleteMark,
+        user,
+        now
+      );
       successCount++;
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
@@ -336,9 +367,13 @@ export function applyTrackChangesForSuggesting(
 
   // Check if enableTrackChanges command is available
   const commands = editor.commands as Record<string, unknown>;
-  if (typeof commands.enableTrackChanges !== 'function') {
+  if (typeof commands.enableTrackChanges !== "function") {
     console.warn("enableTrackChanges command not available");
-    return { successCount: 0, totalCount: changes.length, errors: ["enableTrackChanges not available"] };
+    return {
+      successCount: 0,
+      totalCount: changes.length,
+      errors: ["enableTrackChanges not available"],
+    };
   }
 
   // Enable track changes mode
@@ -349,8 +384,14 @@ export function applyTrackChangesForSuggesting(
     const sortedChanges = [...changes].sort((a, b) => {
       // For deletions in original: use charStart (position in original text)
       // For insertions: use insertAt (position where to insert in original)
-      const posA = a.type === "deletion" ? (a.charStart ?? 0) : (a.insertAt ?? a.charStart ?? 0);
-      const posB = b.type === "deletion" ? (b.charStart ?? 0) : (b.insertAt ?? b.charStart ?? 0);
+      const posA =
+        a.type === "deletion"
+          ? a.charStart ?? 0
+          : a.insertAt ?? a.charStart ?? 0;
+      const posB =
+        b.type === "deletion"
+          ? b.charStart ?? 0
+          : b.insertAt ?? b.charStart ?? 0;
       return posB - posA;
     });
 
@@ -389,7 +430,10 @@ export function applyTrackChangesForSuggesting(
 
             if (pmInsertAt !== undefined) {
               // Position cursor and insert
-              editor.commands.setTextSelection({ from: pmInsertAt, to: pmInsertAt });
+              editor.commands.setTextSelection({
+                from: pmInsertAt,
+                to: pmInsertAt,
+              });
               const { tr, schema } = editor.state;
               const textNode = schema.text(change.content);
               const newTr = tr.insert(pmInsertAt, textNode);
@@ -421,12 +465,14 @@ export function applyTrackChangesForSuggesting(
     }
   } finally {
     // Disable track changes mode
-    if (typeof commands.disableTrackChanges === 'function') {
+    if (typeof commands.disableTrackChanges === "function") {
       (commands.disableTrackChanges as () => void)();
     }
   }
 
-  console.log(`Track changes (suggesting) applied: ${successCount}/${changes.length}`);
+  console.log(
+    `Track changes (suggesting) applied: ${successCount}/${changes.length}`
+  );
 
   return { successCount, totalCount: changes.length, errors };
 }
@@ -437,13 +483,22 @@ export function applyTrackChangesForSuggesting(
 function generateCommentText(change: ChangeWithPosition): string {
   switch (change.type) {
     case "insertion":
-      return `<p><strong>Added:</strong> "${truncateText(change.content, 100)}"</p>`;
+      return `<p><strong>Added:</strong> "${truncateText(
+        change.content,
+        100
+      )}"</p>`;
 
     case "deletion":
-      return `<p><strong>Removed:</strong> "${truncateText(change.content, 100)}"</p>`;
+      return `<p><strong>Removed:</strong> "${truncateText(
+        change.content,
+        100
+      )}"</p>`;
 
     case "replacement":
-      return `<p><strong>Changed from:</strong> "${truncateText(change.oldContent || "", 50)}"</p><p><strong>To:</strong> "${truncateText(change.content, 50)}"</p>`;
+      return `<p><strong>Changed from:</strong> "${truncateText(
+        change.oldContent || "",
+        50
+      )}"</p><p><strong>To:</strong> "${truncateText(change.content, 50)}"</p>`;
 
     default:
       return `<p>Modified content</p>`;
@@ -459,26 +514,95 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 /**
+ * Generate HTML comment content for a change with approve/disapprove context
+ */
+function generateChangeCommentHtml(change: ChangeWithPosition): string {
+  const escapeHtml = (text: string) =>
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  switch (change.type) {
+    case "insertion":
+      return `
+        <div style="font-family: system-ui, sans-serif;">
+          <p style="margin: 0 0 8px 0; color: #166534; font-weight: 600;">
+            ✚ Text Added
+          </p>
+          <p style="margin: 0 0 12px 0; padding: 8px; background: #dcfce7; border-radius: 4px; font-size: 13px;">
+            "${escapeHtml(truncateText(change.content, 150))}"
+          </p>
+        </div>
+      `.trim();
+
+    case "deletion":
+      return `
+        <div style="font-family: system-ui, sans-serif;">
+          <p style="margin: 0 0 8px 0; color: #dc2626; font-weight: 600;">
+            ✖ Text Removed
+          </p>
+          <p style="margin: 0 0 12px 0; padding: 8px; background: #fee2e2; border-radius: 4px; font-size: 13px; text-decoration: line-through;">
+            "${escapeHtml(truncateText(change.content, 150))}"
+          </p>
+        </div>
+      `.trim();
+
+    case "replacement":
+      return `
+        <div style="font-family: system-ui, sans-serif;">
+          <p style="margin: 0 0 8px 0; color: #ca8a04; font-weight: 600;">
+            ↔ Text Replaced
+          </p>
+          <div style="margin: 0 0 8px 0; padding: 8px; background: #fee2e2; border-radius: 4px; font-size: 13px;">
+            <span style="color: #991b1b; font-weight: 500;">Before:</span>
+            <span style="text-decoration: line-through;">"${escapeHtml(
+              truncateText(change.oldContent || "", 100)
+            )}"</span>
+          </div>
+          <div style="margin: 0 0 12px 0; padding: 8px; background: #dcfce7; border-radius: 4px; font-size: 13px;">
+            <span style="color: #166534; font-weight: 500;">After:</span>
+            "${escapeHtml(truncateText(change.content, 100))}"
+          </div>
+        </div>
+      `.trim();
+
+    default:
+      return `<p>Modified content - please review.</p>`;
+  }
+}
+
+/**
  * Add explanatory comments to each change in the document.
  * Should be called after applyTrackChanges to add comments at the actual track change mark positions.
+ *
+ * Comments include:
+ * - What type of change occurred (addition, deletion, replacement)
+ * - The actual content that was changed
+ * - Visual styling to make the change type clear
+ *
+ * Users can then approve (resolve) or reject (remove) each comment.
  *
  * @param editor - The editor instance
  * @param changes - Changes to add comments for
  * @param authorName - Name of the comment author (default: "Document Comparison")
+ * @param authorEmail - Email of the comment author
  * @returns Object with success count and any errors
  */
 export function addCommentsToChanges(
   editor: SuperDocEditor,
   changes: ChangeWithPosition[],
-  authorName: string = "Document Comparison"
+  authorName: string = "Document Comparison",
+  authorEmail: string = "comparison@system"
 ): { successCount: number; totalCount: number; errors: string[] } {
   const errors: string[] = [];
   let successCount = 0;
 
   // Check if insertComment command is available
-  if (typeof editor.commands.insertComment !== 'function') {
+  if (typeof editor.commands.insertComment !== "function") {
     console.warn("insertComment command not available");
-    return { successCount: 0, totalCount: changes.length, errors: ["insertComment command not available"] };
+    return {
+      successCount: 0,
+      totalCount: changes.length,
+      errors: ["insertComment command not available"],
+    };
   }
 
   // Find all track change marks in the document (these are the actual positions after applying track changes)
@@ -515,14 +639,16 @@ export function addCommentsToChanges(
       // Set selection to the track change mark range
       editor.commands.setTextSelection({ from, to });
 
-      // Generate comment text based on change type
-      const commentText = generateCommentText(change);
+      // Generate rich HTML comment content
+      const commentText = generateChangeCommentHtml(change);
 
       // Insert the comment
       editor.commands.insertComment({
         commentId: `comment-${change.id}`,
         commentText,
         creatorName: authorName,
+        creatorEmail: authorEmail,
+        isInternal: false, // Make visible to all users
       });
 
       successCount++;
@@ -535,6 +661,65 @@ export function addCommentsToChanges(
   console.log(`Comments added: ${successCount}/${changes.length}`);
 
   return { successCount, totalCount: changes.length, errors };
+}
+
+/**
+ * Approve a change by resolving its comment.
+ * The track change mark remains but the comment is marked as resolved.
+ *
+ * @param editor - The editor instance
+ * @param changeId - The change ID to approve
+ * @returns True if successful
+ */
+export function approveChange(
+  editor: SuperDocEditor,
+  changeId: string
+): boolean {
+  const commentId = `comment-${changeId}`;
+
+  if (typeof editor.commands.resolveComment !== "function") {
+    console.warn("resolveComment command not available");
+    return false;
+  }
+
+  try {
+    editor.commands.resolveComment({ commentId });
+    console.log(`Change ${changeId} approved`);
+    return true;
+  } catch (e) {
+    console.warn(`Failed to approve change ${changeId}:`, e);
+    return false;
+  }
+}
+
+/**
+ * Reject a change by removing its comment.
+ * Note: This only removes the comment, not the track change mark itself.
+ * To fully reject, you would also need to accept/reject the track change.
+ *
+ * @param editor - The editor instance
+ * @param changeId - The change ID to reject
+ * @returns True if successful
+ */
+export function rejectChange(
+  editor: SuperDocEditor,
+  changeId: string
+): boolean {
+  const commentId = `comment-${changeId}`;
+
+  if (typeof editor.commands.removeComment !== "function") {
+    console.warn("removeComment command not available");
+    return false;
+  }
+
+  try {
+    editor.commands.removeComment({ commentId });
+    console.log(`Change ${changeId} rejected`);
+    return true;
+  } catch (e) {
+    console.warn(`Failed to reject change ${changeId}:`, e);
+    return false;
+  }
 }
 
 /**
@@ -566,7 +751,15 @@ function applyModification(
       );
 
     case "insertion":
-      return applyInsertion(tr, change, pmFrom, pmTo, trackInsertMark, user, date);
+      return applyInsertion(
+        tr,
+        change,
+        pmFrom,
+        pmTo,
+        trackInsertMark,
+        user,
+        date
+      );
 
     case "deletion":
       if (isDeletion) {
@@ -602,11 +795,21 @@ function applyReplacement(
   date: string
 ): Transaction {
   // Mark the new text with trackInsert
-  const insertMark = createTrackInsertMark(trackInsertMark, `insert-${change.id}`, user, date);
+  const insertMark = createTrackInsertMark(
+    trackInsertMark,
+    `insert-${change.id}`,
+    user,
+    date
+  );
   tr = tr.addMark(pmFrom, pmTo, insertMark);
 
   // Insert the old (deleted) text before the new text with trackDelete mark
-  const deleteMark = createTrackDeleteMark(trackDeleteMark, `delete-${change.id}`, user, date);
+  const deleteMark = createTrackDeleteMark(
+    trackDeleteMark,
+    `delete-${change.id}`,
+    user,
+    date
+  );
 
   // Get formatting marks from surrounding text
   const formattingMarks = getFormattingMarks(tr, undefined, pmFrom);
@@ -631,7 +834,12 @@ function applyInsertion(
   user: TrackChangeUser,
   date: string
 ): Transaction {
-  const insertMark = createTrackInsertMark(trackInsertMark, `insert-${change.id}`, user, date);
+  const insertMark = createTrackInsertMark(
+    trackInsertMark,
+    `insert-${change.id}`,
+    user,
+    date
+  );
   return tr.addMark(pmFrom, pmTo, insertMark);
 }
 
@@ -648,7 +856,12 @@ function applyDeletion(
   date: string,
   contextRange?: { from: number; to: number }
 ): Transaction {
-  const deleteMark = createTrackDeleteMark(trackDeleteMark, `delete-${change.id}`, user, date);
+  const deleteMark = createTrackDeleteMark(
+    trackDeleteMark,
+    `delete-${change.id}`,
+    user,
+    date
+  );
 
   // Get formatting marks from context
   const formattingMarks = getFormattingMarks(tr, contextRange, pmFrom);
@@ -667,7 +880,12 @@ function applyDeletion(
 function findTrackChangeMarks(
   editor: SuperDocEditor
 ): Array<{ from: number; to: number; type: "insert" | "delete"; id?: string }> {
-  const marks: Array<{ from: number; to: number; type: "insert" | "delete"; id?: string }> = [];
+  const marks: Array<{
+    from: number;
+    to: number;
+    type: "insert" | "delete";
+    id?: string;
+  }> = [];
   const { doc } = editor.state;
 
   doc.descendants((node, pos) => {
@@ -726,7 +944,10 @@ export async function navigateToChange(
     for (const mark of trackMarks) {
       if (mark.type === targetType) {
         const text = doc.textBetween(mark.from, mark.to);
-        if (text.includes(searchContent) || searchContent.includes(text.trim())) {
+        if (
+          text.includes(searchContent) ||
+          searchContent.includes(text.trim())
+        ) {
           targetMark = mark;
           break;
         }
@@ -735,7 +956,11 @@ export async function navigateToChange(
   }
 
   if (!targetMark) {
-    console.warn("[navigateToChange] No matching mark found for:", change.id, change.content.substring(0, 30));
+    console.warn(
+      "[navigateToChange] No matching mark found for:",
+      change.id,
+      change.content.substring(0, 30)
+    );
     return;
   }
 
@@ -749,12 +974,17 @@ export async function navigateToChange(
   setTimeout(() => {
     try {
       // Find the scroll container by looking for an element with overflow:auto/scroll
-      const findScrollContainer = (startElement: HTMLElement | null): HTMLElement | null => {
+      const findScrollContainer = (
+        startElement: HTMLElement | null
+      ): HTMLElement | null => {
         let current = startElement;
         while (current) {
           const style = window.getComputedStyle(current);
-          const hasOverflow = style.overflow === 'auto' || style.overflow === 'scroll' ||
-                              style.overflowY === 'auto' || style.overflowY === 'scroll';
+          const hasOverflow =
+            style.overflow === "auto" ||
+            style.overflow === "scroll" ||
+            style.overflowY === "auto" ||
+            style.overflowY === "scroll";
           const isScrollable = current.scrollHeight > current.clientHeight + 10;
 
           if (hasOverflow && isScrollable) {
@@ -771,14 +1001,16 @@ export async function navigateToChange(
         element?: HTMLElement;
       } | null;
 
-      const startElement = presentationEditor?.visibleHost || presentationEditor?.element ||
-                          document.querySelector('.presentation-editor') as HTMLElement;
+      const startElement =
+        presentationEditor?.visibleHost ||
+        presentationEditor?.element ||
+        (document.querySelector(".presentation-editor") as HTMLElement);
 
       let scrollContainer = findScrollContainer(startElement);
 
       // Fallback: find scroll container from #superdoc-main
       if (!scrollContainer) {
-        const superdocMain = document.getElementById('superdoc-main');
+        const superdocMain = document.getElementById("superdoc-main");
         scrollContainer = findScrollContainer(superdocMain);
       }
 
@@ -786,12 +1018,13 @@ export async function navigateToChange(
         // Calculate scroll position based on document position ratio
         const docLength = editor.state.doc.content.size;
         const positionRatio = from / docLength;
-        const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+        const maxScroll =
+          scrollContainer.scrollHeight - scrollContainer.clientHeight;
         const scrollTo = positionRatio * maxScroll;
 
         scrollContainer.scrollTo({
           top: Math.max(0, scrollTo),
-          behavior: 'smooth'
+          behavior: "smooth",
         });
       }
     } catch (e) {
