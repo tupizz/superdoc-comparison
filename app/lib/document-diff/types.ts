@@ -83,10 +83,23 @@ export interface SearchResult {
 }
 
 /**
+ * Options for inserting a comment
+ */
+export interface InsertCommentOptions {
+  readonly commentId?: string;
+  readonly commentText: string;
+  readonly isInternal?: boolean;
+  readonly creatorName?: string;
+  readonly creatorEmail?: string;
+}
+
+/**
  * SuperDoc/TipTap editor commands interface
  */
 export interface SuperDocCommands {
   search(text: string, options?: { highlight?: boolean }): SearchResult[] | null;
+  setTextSelection(range: { from: number; to: number }): boolean;
+  insertComment(options: InsertCommentOptions): boolean;
   [key: string]: unknown;
 }
 
@@ -100,6 +113,24 @@ export interface SuperDocChain {
 }
 
 /**
+ * PresentationEditor scroll options
+ */
+export interface ScrollOptions {
+  readonly behavior?: 'auto' | 'smooth';
+  readonly block?: 'start' | 'center' | 'end' | 'nearest';
+}
+
+/**
+ * PresentationEditor interface - the outer editor that handles pagination and scrolling
+ */
+export interface SuperDocPresentationEditor {
+  /** Scroll to a document position */
+  scrollToPosition(pos: number, options?: ScrollOptions): boolean;
+  /** Navigate to a bookmark/anchor */
+  goToAnchor(anchor: string): Promise<boolean>;
+}
+
+/**
  * SuperDoc Editor interface - matches the actual SuperDoc Editor class
  * This uses real ProseMirror types for proper type safety
  */
@@ -110,6 +141,8 @@ export interface SuperDocEditor {
   readonly state: EditorState;
   /** ProseMirror schema */
   readonly schema: Schema;
+  /** Reference to the PresentationEditor (if running in presentation mode) */
+  readonly presentationEditor?: SuperDocPresentationEditor | null;
   /** Get document as JSON */
   getJSON(): ProseMirrorJsonNode;
   /** Get document as HTML */

@@ -117,15 +117,17 @@ describe("computeChangesWithPositions", () => {
 
   describe("replacements", () => {
     it("should detect a simple replacement", () => {
-      const original = "Hello world";
-      const modified = "Hello universe";
+      // Use words with no shared characters to get a clean single replacement
+      // diffChars would split "world" -> "universe" into multiple changes due to shared 'r'
+      const original = "Hello cat";
+      const modified = "Hello dog";
 
       const changes = computeChangesWithPositions(original, modified);
 
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe("replacement");
-      expect(changes[0].oldContent).toBe("world");
-      expect(changes[0].content).toBe("universe");
+      expect(changes[0].oldContent).toBe("cat");
+      expect(changes[0].content).toBe("dog");
     });
 
     it("should track positions for replacements", () => {

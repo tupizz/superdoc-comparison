@@ -264,7 +264,7 @@ export function createTrackDeleteMark(
 }
 
 /**
- * Apply track changes to a document.
+ * Apply track changes to a document (legacy method using marks).
  * This is the main entry point for applying diff results as track changes.
  *
  * @param editor - The editor instance
@@ -312,6 +312,227 @@ export function applyTrackChanges(
   editor.view.dispatch(tr);
 
   console.log(`Track changes applied: ${successCount}/${changes.length}`);
+
+  return { successCount, totalCount: changes.length, errors };
+}
+
+/**
+ * Apply track changes using SuperDoc's suggesting mode.
+ * This loads the ORIGINAL document and applies actual changes (deletes/inserts)
+ * with track changes enabled, so SuperDoc shows proper "Removed"/"Added" labels.
+ *
+ * @param editor - The editor instance (should have ORIGINAL document loaded)
+ * @param changes - Changes computed from original vs modified
+ * @param originalPosMap - Position mapping from the original document
+ * @returns Result with success count and errors
+ */
+export function applyTrackChangesForSuggesting(
+  editor: SuperDocEditor,
+  changes: ChangeWithPosition[],
+  originalPosMap: PositionMap
+): TrackChangesResult {
+  const errors: string[] = [];
+  let successCount = 0;
+
+  // Check if enableTrackChanges command is available
+  const commands = editor.commands as Record<string, unknown>;
+  if (typeof commands.enableTrackChanges !== 'function') {
+    console.warn("enableTrackChanges command not available");
+    return { successCount: 0, totalCount: changes.length, errors: ["enableTrackChanges not available"] };
+  }
+
+  // Enable track changes mode
+  (commands.enableTrackChanges as () => void)();
+
+  try {
+    // Sort changes by position descending (apply from end to start to avoid position shifts)
+    const sortedChanges = [...changes].sort((a, b) => {
+      // For deletions in original: use charStart (position in original text)
+      // For insertions: use insertAt (position where to insert in original)
+      const posA = a.type === "deletion" ? (a.charStart ?? 0) : (a.insertAt ?? a.charStart ?? 0);
+      const posB = b.type === "deletion" ? (b.charStart ?? 0) : (b.insertAt ?? b.charStart ?? 0);
+      return posB - posA;
+    });
+
+    for (const change of sortedChanges) {
+      try {
+        if (change.type === "deletion") {
+          // Text exists in original, not in modified → DELETE it
+          // The change.content is the deleted text, we need to find and delete it
+          if (change.charStart !== undefined && change.charEnd !== undefined) {
+            const pmFrom = originalPosMap.charToPos[change.charStart];
+            const pmTo = originalPosMap.charToPos[change.charEnd - 1];
+
+            if (pmFrom !== undefined && pmTo !== undefined) {
+              // Select and delete the text
+              editor.commands.setTextSelection({ from: pmFrom, to: pmTo + 1 });
+              // Delete by replacing with empty string
+              const { tr } = editor.state;
+              const newTr = tr.deleteSelection();
+              editor.view.dispatch(newTr);
+              successCount++;
+            }
+          }
+        } else if (change.type === "insertion") {
+          // Text exists in modified, not in original → INSERT it
+          // Find where to insert based on context
+          if (change.insertAt !== undefined) {
+            let pmInsertAt = originalPosMap.charToPos[change.insertAt];
+
+            // Fallback: try previous position
+            if (pmInsertAt === undefined && change.insertAt > 0) {
+              const prevPos = originalPosMap.charToPos[change.insertAt - 1];
+              if (prevPos !== undefined) {
+                pmInsertAt = prevPos + 1;
+              }
+            }
+
+            if (pmInsertAt !== undefined) {
+              // Position cursor and insert
+              editor.commands.setTextSelection({ from: pmInsertAt, to: pmInsertAt });
+              const { tr, schema } = editor.state;
+              const textNode = schema.text(change.content);
+              const newTr = tr.insert(pmInsertAt, textNode);
+              editor.view.dispatch(newTr);
+              successCount++;
+            }
+          }
+        } else if (change.type === "replacement") {
+          // Text was replaced: DELETE old text, INSERT new text
+          if (change.charStart !== undefined && change.charEnd !== undefined) {
+            const pmFrom = originalPosMap.charToPos[change.charStart];
+            const pmTo = originalPosMap.charToPos[change.charEnd - 1];
+
+            if (pmFrom !== undefined && pmTo !== undefined) {
+              // Select and replace the text
+              editor.commands.setTextSelection({ from: pmFrom, to: pmTo + 1 });
+              const { tr, schema } = editor.state;
+              const textNode = schema.text(change.content);
+              const newTr = tr.replaceSelectionWith(textNode, false);
+              editor.view.dispatch(newTr);
+              successCount++;
+            }
+          }
+        }
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        errors.push(`Failed to apply ${change.type}: ${errorMsg}`);
+      }
+    }
+  } finally {
+    // Disable track changes mode
+    if (typeof commands.disableTrackChanges === 'function') {
+      (commands.disableTrackChanges as () => void)();
+    }
+  }
+
+  console.log(`Track changes (suggesting) applied: ${successCount}/${changes.length}`);
+
+  return { successCount, totalCount: changes.length, errors };
+}
+
+/**
+ * Generate a comment description for a change
+ */
+function generateCommentText(change: ChangeWithPosition): string {
+  switch (change.type) {
+    case "insertion":
+      return `<p><strong>Added:</strong> "${truncateText(change.content, 100)}"</p>`;
+
+    case "deletion":
+      return `<p><strong>Removed:</strong> "${truncateText(change.content, 100)}"</p>`;
+
+    case "replacement":
+      return `<p><strong>Changed from:</strong> "${truncateText(change.oldContent || "", 50)}"</p><p><strong>To:</strong> "${truncateText(change.content, 50)}"</p>`;
+
+    default:
+      return `<p>Modified content</p>`;
+  }
+}
+
+/**
+ * Truncate text to a maximum length with ellipsis
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
+}
+
+/**
+ * Add explanatory comments to each change in the document.
+ * Should be called after applyTrackChanges to add comments at the actual track change mark positions.
+ *
+ * @param editor - The editor instance
+ * @param changes - Changes to add comments for
+ * @param authorName - Name of the comment author (default: "Document Comparison")
+ * @returns Object with success count and any errors
+ */
+export function addCommentsToChanges(
+  editor: SuperDocEditor,
+  changes: ChangeWithPosition[],
+  authorName: string = "Document Comparison"
+): { successCount: number; totalCount: number; errors: string[] } {
+  const errors: string[] = [];
+  let successCount = 0;
+
+  // Check if insertComment command is available
+  if (typeof editor.commands.insertComment !== 'function') {
+    console.warn("insertComment command not available");
+    return { successCount: 0, totalCount: changes.length, errors: ["insertComment command not available"] };
+  }
+
+  // Find all track change marks in the document (these are the actual positions after applying track changes)
+  const trackMarks = findTrackChangeMarks(editor);
+
+  // Create a map of change ID to change for quick lookup
+  const changeMap = new Map<string, ChangeWithPosition>();
+  for (const change of changes) {
+    changeMap.set(change.id, change);
+    // Also map by insert/delete ID pattern used in applyTrackChanges
+    changeMap.set(`insert-${change.id}`, change);
+    changeMap.set(`delete-${change.id}`, change);
+  }
+
+  // Process each track mark and add a comment at its position
+  const processedChangeIds = new Set<string>();
+
+  for (const mark of trackMarks) {
+    try {
+      // Find the corresponding change by mark ID
+      const change = changeMap.get(mark.id || "");
+      if (!change) {
+        continue;
+      }
+
+      // Skip if we already processed this change (replacements have both insert and delete marks)
+      if (processedChangeIds.has(change.id)) {
+        continue;
+      }
+      processedChangeIds.add(change.id);
+
+      const { from, to } = mark;
+
+      // Set selection to the track change mark range
+      editor.commands.setTextSelection({ from, to });
+
+      // Generate comment text based on change type
+      const commentText = generateCommentText(change);
+
+      // Insert the comment
+      editor.commands.insertComment({
+        commentId: `comment-${change.id}`,
+        commentText,
+        creatorName: authorName,
+      });
+
+      successCount++;
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      errors.push(`Failed to add comment: ${errorMsg}`);
+    }
+  }
+
+  console.log(`Comments added: ${successCount}/${changes.length}`);
 
   return { successCount, totalCount: changes.length, errors };
 }
@@ -441,38 +662,142 @@ function applyDeletion(
 }
 
 /**
+ * Find all track change marks in the document with their positions
+ */
+function findTrackChangeMarks(
+  editor: SuperDocEditor
+): Array<{ from: number; to: number; type: "insert" | "delete"; id?: string }> {
+  const marks: Array<{ from: number; to: number; type: "insert" | "delete"; id?: string }> = [];
+  const { doc } = editor.state;
+
+  doc.descendants((node, pos) => {
+    if (node.isText && node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type.name === "trackInsert") {
+          marks.push({
+            from: pos,
+            to: pos + node.nodeSize,
+            type: "insert",
+            id: mark.attrs?.id,
+          });
+        } else if (mark.type.name === "trackDelete") {
+          marks.push({
+            from: pos,
+            to: pos + node.nodeSize,
+            type: "delete",
+            id: mark.attrs?.id,
+          });
+        }
+      }
+    }
+    return true;
+  });
+
+  return marks;
+}
+
+/**
  * Navigate to a change in the editor
+ * Finds track change marks by matching content/id and selects the text
  *
  * @param editor - The editor instance
  * @param change - The change to navigate to
  */
-export function navigateToChange(
+export async function navigateToChange(
   editor: SuperDocEditor,
   change: ChangeWithPosition
-): void {
-  if (change.type === "deletion") {
-    // Deletions are harder to navigate to since we inserted them
-    // Try to search for the deleted content
-    const searchText = change.content.substring(0, Math.min(change.content.length, 30));
-    const results = editor.commands.search(searchText, { highlight: false });
+): Promise<void> {
+  // Find all track change marks in document
+  const trackMarks = findTrackChangeMarks(editor);
 
-    if (results && results.length > 0) {
-      editor.chain()
-        .setTextSelection({ from: results[0].from, to: results[0].to })
-        .scrollIntoView()
-        .run();
+  // Determine which mark type to look for
+  const targetType = change.type === "deletion" ? "delete" : "insert";
+
+  // Find mark matching this change by ID
+  let targetMark = trackMarks.find(
+    (m) => m.type === targetType && m.id === change.id
+  );
+
+  // If not found by ID, try to find by content match
+  if (!targetMark) {
+    const searchContent = change.content.trim().substring(0, 30);
+    const { doc } = editor.state;
+
+    for (const mark of trackMarks) {
+      if (mark.type === targetType) {
+        const text = doc.textBetween(mark.from, mark.to);
+        if (text.includes(searchContent) || searchContent.includes(text.trim())) {
+          targetMark = mark;
+          break;
+        }
+      }
     }
+  }
+
+  if (!targetMark) {
+    console.warn("[navigateToChange] No matching mark found for:", change.id, change.content.substring(0, 30));
     return;
   }
 
-  // For insertions and replacements, search for the content
-  const searchText = change.content.substring(0, Math.min(change.content.length, 50));
-  const results = editor.commands.search(searchText, { highlight: false });
+  const { from, to } = targetMark;
 
-  if (results && results.length > 0) {
-    editor.chain()
-      .setTextSelection({ from: results[0].from, to: results[0].to })
-      .scrollIntoView()
-      .run();
-  }
+  // Set selection
+  editor.commands.setTextSelection({ from, to });
+
+  // SuperDoc uses a hidden editor + visible paginated pages
+  // We need to find the actual scroll container and scroll based on position ratio
+  setTimeout(() => {
+    try {
+      // Find the scroll container by looking for an element with overflow:auto/scroll
+      const findScrollContainer = (startElement: HTMLElement | null): HTMLElement | null => {
+        let current = startElement;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          const hasOverflow = style.overflow === 'auto' || style.overflow === 'scroll' ||
+                              style.overflowY === 'auto' || style.overflowY === 'scroll';
+          const isScrollable = current.scrollHeight > current.clientHeight + 10;
+
+          if (hasOverflow && isScrollable) {
+            return current;
+          }
+          current = current.parentElement;
+        }
+        return null;
+      };
+
+      // Get presentationEditor element and find scroll container from there
+      const presentationEditor = editor.presentationEditor as unknown as {
+        visibleHost?: HTMLElement;
+        element?: HTMLElement;
+      } | null;
+
+      const startElement = presentationEditor?.visibleHost || presentationEditor?.element ||
+                          document.querySelector('.presentation-editor') as HTMLElement;
+
+      let scrollContainer = findScrollContainer(startElement);
+
+      // Fallback: find scroll container from #superdoc-main
+      if (!scrollContainer) {
+        const superdocMain = document.getElementById('superdoc-main');
+        scrollContainer = findScrollContainer(superdocMain);
+      }
+
+      if (scrollContainer) {
+        // Calculate scroll position based on document position ratio
+        const docLength = editor.state.doc.content.size;
+        const positionRatio = from / docLength;
+        const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+        const scrollTo = positionRatio * maxScroll;
+
+        scrollContainer.scrollTo({
+          top: Math.max(0, scrollTo),
+          behavior: 'smooth'
+        });
+      }
+    } catch (e) {
+      // Silently fail - selection is still set
+    }
+  }, 100);
+
+  editor.view.focus();
 }

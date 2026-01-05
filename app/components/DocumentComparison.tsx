@@ -3,20 +3,20 @@
 import { SuperDoc } from "@harbour-enterprises/superdoc";
 import "@harbour-enterprises/superdoc/style.css";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  applyTrackChanges,
   computeChangesWithPositions,
   computeDiffSummary,
   extractTextFromJson,
   extractTextWithPositions,
-  applyTrackChanges,
   navigateToChange,
   type ChangeWithPosition,
   type DiffSummary,
-  type SuperDocEditor,
-  type ProseMirrorJsonNode,
   type PositionMap,
+  type ProseMirrorJsonNode,
+  type SuperDocEditor,
 } from "@/app/lib/document-diff";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // =============================================================================
 // Types
@@ -55,25 +55,42 @@ export default function DocumentComparison({
   modifiedName,
 }: DocumentComparisonProps) {
   const superdocRef = useRef<SuperDoc | null>(null);
+  const posMapRef = useRef<PositionMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [changes, setChanges] = useState<ChangeWithPosition[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const summary: DiffSummary = computeDiffSummary(changes);
 
+  // Handle export/download of the annotated document
+  const handleDownload = useCallback(() => {
+    if (!superdocRef.current) return;
+    try {
+      // Export document with internal comments
+      (
+        superdocRef.current as unknown as {
+          export: (opts: { commentsType: string }) => void;
+        }
+      ).export({
+        commentsType: "internal",
+      });
+      console.log("Document exported");
+    } catch (e) {
+      console.warn("Export failed:", e);
+    }
+  }, []);
+
   // Handle navigation to a change in the sidebar
   const handleNavigateToChange = useCallback((change: ChangeWithPosition) => {
     if (!superdocRef.current) return;
 
-    const editor = superdocRef.current.activeEditor as unknown as SuperDocEditor | undefined;
+    const editor = superdocRef.current.activeEditor as unknown as
+      | SuperDocEditor
+      | undefined;
     if (!editor) return;
 
     setSelectedId(change.id);
-
-    // Only navigate for non-deletions (deletions are inserted, harder to locate)
-    if (change.type !== "deletion") {
-      navigateToChange(editor, change);
-    }
+    navigateToChange(editor, change);
   }, []);
 
   // Main effect: Initialize SuperDoc instances and apply track changes
@@ -89,7 +106,12 @@ export default function DocumentComparison({
      * Computes diff and applies track changes
      */
     const onBothLoaded = () => {
-      if (!originalJson || !modifiedJson || !mounted || !mainSuperdoc?.activeEditor) {
+      if (
+        !originalJson ||
+        !modifiedJson ||
+        !mounted ||
+        !mainSuperdoc?.activeEditor
+      ) {
         return;
       }
 
@@ -100,13 +122,18 @@ export default function DocumentComparison({
 
       // Build position map from the live modified document
       const modifiedPosMap: PositionMap = extractTextWithPositions(editor);
+      posMapRef.current = modifiedPosMap; // Store for navigation
 
       console.log("Original text length:", originalText.length);
       console.log("Modified text length:", modifiedPosMap.text.length);
       console.log("Position map size:", modifiedPosMap.charToPos.length);
 
-      // Compute changes using word-level diff
-      const computed = computeChangesWithPositions(originalText, modifiedPosMap.text);
+      // Compute changes using character-level diff
+      const computed = computeChangesWithPositions(
+        originalText,
+        modifiedPosMap.text
+      );
+
       setChanges(computed);
       setIsLoading(false);
 
@@ -115,13 +142,19 @@ export default function DocumentComparison({
         setTimeout(() => {
           if (!superdocRef.current?.activeEditor || !mounted) return;
 
-          console.log("Applying track changes to", computed.length, "changes");
           const result = applyTrackChanges(
             superdocRef.current.activeEditor as unknown as SuperDocEditor,
             computed,
             modifiedPosMap
           );
-          console.log(`Track changes result: ${result.successCount}/${result.totalCount}`);
+
+          // Re-extract position map AFTER track changes applied
+          // (deletions insert text, changing positions)
+          const updatedPosMap = extractTextWithPositions(
+            superdocRef.current.activeEditor as unknown as SuperDocEditor
+          );
+          posMapRef.current = updatedPosMap;
+          console.log("Position map updated after track changes");
         }, 300);
       }
     };
@@ -138,10 +171,35 @@ export default function DocumentComparison({
       documents: [
         { id: "modified", data: base64ToBlob(modifiedBase64), type: "docx" },
       ],
+      // User context for comment attribution
+      user: {
+        name: "Tadeu Tupinamba",
+        email: "tadeu.tupiz@gmail.com",
+      },
+      // Enable modules
+      modules: {
+        toolbar: {
+          selector: "#superdoc-toolbar",
+          groups: {
+            left: ["undo", "redo"],
+            center: [
+              "fontFamily",
+              "fontSize",
+              "bold",
+              "italic",
+              "underline",
+              "color",
+              "highlight",
+            ],
+          },
+        },
+      },
+      // Enable pagination for multi-page documents
       documentMode: "editing",
       onReady: () => {
         if (!mounted) return;
-        modifiedJson = mainSuperdoc?.activeEditor?.getJSON() as ProseMirrorJsonNode;
+        modifiedJson =
+          mainSuperdoc?.activeEditor?.getJSON() as ProseMirrorJsonNode;
         superdocRef.current = mainSuperdoc;
         onBothLoaded();
       },
@@ -156,7 +214,8 @@ export default function DocumentComparison({
       documentMode: "viewing",
       onReady: () => {
         if (!mounted) return;
-        originalJson = hiddenSuperdoc?.activeEditor?.getJSON() as ProseMirrorJsonNode;
+        originalJson =
+          hiddenSuperdoc?.activeEditor?.getJSON() as ProseMirrorJsonNode;
         onBothLoaded();
       },
     });
@@ -165,6 +224,7 @@ export default function DocumentComparison({
     return () => {
       mounted = false;
       superdocRef.current = null;
+      posMapRef.current = null;
 
       // Destroy SuperDoc instances
       try {
@@ -199,6 +259,12 @@ export default function DocumentComparison({
           originalName={originalName}
           summary={summary}
           isLoading={isLoading}
+          onDownload={handleDownload}
+        />
+        {/* Toolbar container */}
+        <div
+          id="superdoc-toolbar"
+          className="bg-gray-100 border-b border-gray-200 px-2 py-1"
         />
         <div className="flex-1 bg-white rounded-b-lg overflow-auto relative">
           {isLoading && <LoadingOverlay />}
@@ -226,6 +292,7 @@ interface DocumentHeaderProps {
   originalName: string;
   summary: DiffSummary;
   isLoading: boolean;
+  onDownload: () => void;
 }
 
 function DocumentHeader({
@@ -233,23 +300,35 @@ function DocumentHeader({
   originalName,
   summary,
   isLoading,
+  onDownload,
 }: DocumentHeaderProps) {
   return (
     <div className="bg-zinc-800 px-4 py-2 rounded-t-lg border-b border-zinc-700 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-zinc-300">Modified Document</span>
+        <span className="text-sm font-medium text-zinc-300">
+          Modified Document
+        </span>
         <span className="text-xs text-zinc-500 truncate">{modifiedName}</span>
       </div>
-      {!isLoading && (
-        <div className="flex gap-3 text-xs">
-          <span className="text-zinc-400">vs {originalName}</span>
-          <span className="text-green-400">+{summary.insertions}</span>
-          <span className="text-red-400">-{summary.deletions}</span>
-          {summary.replacements > 0 && (
-            <span className="text-yellow-400">↔{summary.replacements}</span>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-4">
+        {!isLoading && (
+          <div className="flex gap-3 text-xs">
+            <span className="text-zinc-400">vs {originalName}</span>
+            <span className="text-green-400">+{summary.insertions}</span>
+            <span className="text-red-400">-{summary.deletions}</span>
+            {summary.replacements > 0 && (
+              <span className="text-yellow-400">↔{summary.replacements}</span>
+            )}
+          </div>
+        )}
+        <button
+          onClick={onDownload}
+          disabled={isLoading}
+          className="px-3 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-600 disabled:cursor-not-allowed text-white rounded transition-colors"
+        >
+          Export
+        </button>
+      </div>
     </div>
   );
 }
@@ -321,7 +400,9 @@ function ChangeCard({ change, index, isSelected, onSelect }: ChangeCardProps) {
           ? "bg-zinc-700 ring-1 ring-blue-500"
           : "bg-zinc-800 hover:bg-zinc-700"
       } ${isDeletion ? "cursor-default opacity-80" : "cursor-pointer"}`}
-      title={isDeletion ? "Deleted text (shown in document)" : "Click to navigate"}
+      title={
+        isDeletion ? "Deleted text (shown in document)" : "Click to navigate"
+      }
     >
       <ChangeCardHeader type={change.type} index={index} />
       <ChangeCardContent change={change} />
@@ -390,7 +471,9 @@ function ChangeCardContent({ change }: ChangeCardContentProps) {
   return (
     <p
       className={`mt-1 text-sm line-clamp-2 ${
-        change.type === "insertion" ? "text-green-300" : "text-red-300 line-through"
+        change.type === "insertion"
+          ? "text-green-300"
+          : "text-red-300 line-through"
       }`}
     >
       {truncate(change.content, 80)}
