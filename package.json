@@ -29,12 +29,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/diff": "^8.0.0",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.0.16",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "jsdom": "^27.4.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.16"
