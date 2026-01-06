@@ -11,7 +11,7 @@ export const SUMMARIZE_SYSTEM_PROMPT = `You are a document analyst. Summarize do
 
 Rules:
 - Be extremely concise. Use short phrases, not full sentences.
-- Document context: 1 sentence max
+- Document context: 1 paragraph max
 - Overview: 1 short sentence
 - Each change item: max 8-10 words
 - Summary: 3-5 sentences max
@@ -21,7 +21,11 @@ Rules:
 
 // Zod schema for structured output
 export const changeSummarySchema = z.object({
-  documentContext: z.string().describe("1 sentence: document type and purpose"),
+  documentContext: z
+    .string()
+    .describe(
+      "1 paragraph: document type and purpose. Explain the document in a way that is easy to understand. Do not mention the document name."
+    ),
   overview: z.string().describe("1 short sentence: what changed overall"),
   textChanges: z
     .array(z.string())

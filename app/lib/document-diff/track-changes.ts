@@ -18,7 +18,9 @@ import {
 import type {
   ChangeWithPosition,
   DocumentModification,
+  FormattingChangeWithPosition,
   PositionMap,
+  PositionMapWithFormatting,
   SuperDocEditor,
   TrackChangeUser,
   TrackChangesResult,
@@ -881,6 +883,195 @@ function findTrackChangeMarks(
   });
 
   return marks;
+}
+
+// =============================================================================
+// Formatting Track Changes
+// =============================================================================
+
+/**
+ * Apply track format marks to highlight formatting changes.
+ * Uses the trackFormat mark to show where formatting was modified.
+ *
+ * @param editor - The editor instance
+ * @param formattingChanges - Formatting changes to apply
+ * @param posMap - Position mapping (must include charToPos)
+ * @param user - User attribution for track changes
+ * @returns Result with success count and errors
+ */
+export function applyFormattingTrackChanges(
+  editor: SuperDocEditor,
+  formattingChanges: FormattingChangeWithPosition[],
+  posMap: PositionMap | PositionMapWithFormatting,
+  user: TrackChangeUser = COMPARISON_USER
+): TrackChangesResult {
+  const schema = editor.schema;
+  const trackFormatMark = schema.marks.trackFormat;
+
+  if (!trackFormatMark) {
+    console.warn("trackFormat mark not available in schema");
+    return {
+      successCount: 0,
+      totalCount: formattingChanges.length,
+      errors: ["Schema missing trackFormat mark"],
+    };
+  }
+
+  let tr = editor.state.tr;
+  const now = new Date().toISOString();
+  let successCount = 0;
+  const errors: string[] = [];
+
+  // Sort by position descending for safe application
+  const sortedChanges = [...formattingChanges].sort(
+    (a, b) => b.charStart - a.charStart
+  );
+
+  for (const change of sortedChanges) {
+    try {
+      // Map character positions to ProseMirror positions
+      const pmFrom = posMap.charToPos[change.charStart];
+      const pmTo = posMap.charToPos[change.charEnd - 1];
+
+      if (pmFrom === undefined || pmTo === undefined) {
+        errors.push(
+          `Position mapping failed for formatting change: ${change.content.substring(0, 20)}...`
+        );
+        continue;
+      }
+
+      // Create the track format mark with change info
+      const mark = trackFormatMark.create({
+        id: change.id,
+        author: user.name,
+        authorEmail: user.email,
+        authorImage: user.image,
+        date: now,
+        // Store change details in attrs for display
+        changeType: change.type,
+        markType: change.markType,
+        oldAttrs: change.oldAttrs ? JSON.stringify(change.oldAttrs) : undefined,
+        newAttrs: change.newAttrs ? JSON.stringify(change.newAttrs) : undefined,
+      });
+
+      tr = tr.addMark(pmFrom, pmTo + 1, mark);
+      successCount++;
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      errors.push(`Failed to apply formatting change: ${errorMsg}`);
+    }
+  }
+
+  // Dispatch the transaction
+  if (successCount > 0) {
+    editor.view.dispatch(tr);
+  }
+
+  console.log(
+    `Formatting track changes applied: ${successCount}/${formattingChanges.length}`
+  );
+
+  return { successCount, totalCount: formattingChanges.length, errors };
+}
+
+/**
+ * Navigate to a formatting change in the editor.
+ * Finds the trackFormat mark by ID and selects it.
+ *
+ * @param editor - The editor instance
+ * @param change - The formatting change to navigate to
+ */
+export function navigateToFormattingChange(
+  editor: SuperDocEditor,
+  change: FormattingChangeWithPosition
+): void {
+  const doc = editor.state.doc;
+  let foundFrom: number | null = null;
+  let foundTo: number | null = null;
+
+  // Search for the trackFormat mark with matching ID
+  doc.descendants((node, pos) => {
+    if (foundFrom !== null) return false; // Stop if already found
+
+    if (node.isText) {
+      for (const mark of node.marks) {
+        if (mark.type.name === "trackFormat" && mark.attrs.id === change.id) {
+          foundFrom = pos;
+          foundTo = pos + node.nodeSize;
+          return false; // Stop traversal
+        }
+      }
+    }
+    return true; // Continue traversal
+  });
+
+  if (foundFrom === null || foundTo === null) {
+    console.warn("Could not find trackFormat mark for change:", change.id);
+    return;
+  }
+
+  // Set selection
+  editor.commands.setTextSelection({ from: foundFrom, to: foundTo });
+
+  // Scroll into view
+  setTimeout(() => {
+    try {
+      const findScrollContainer = (
+        startElement: HTMLElement | null
+      ): HTMLElement | null => {
+        let current = startElement;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          const hasOverflow =
+            style.overflow === "auto" ||
+            style.overflow === "scroll" ||
+            style.overflowY === "auto" ||
+            style.overflowY === "scroll";
+          const isScrollable = current.scrollHeight > current.clientHeight + 10;
+
+          if (hasOverflow && isScrollable) {
+            return current;
+          }
+          current = current.parentElement;
+        }
+        return null;
+      };
+
+      const presentationEditor = editor.presentationEditor as unknown as {
+        visibleHost?: HTMLElement;
+        element?: HTMLElement;
+      } | null;
+
+      const startElement =
+        presentationEditor?.visibleHost ||
+        presentationEditor?.element ||
+        (document.querySelector(".presentation-editor") as HTMLElement);
+
+      let scrollContainer = findScrollContainer(startElement);
+
+      if (!scrollContainer) {
+        const superdocMain = document.getElementById("superdoc-main");
+        scrollContainer = findScrollContainer(superdocMain);
+      }
+
+      if (scrollContainer && foundFrom !== null) {
+        const docLength = editor.state.doc.content.size;
+        const positionRatio = foundFrom / docLength;
+        const maxScroll =
+          scrollContainer.scrollHeight - scrollContainer.clientHeight;
+        const scrollTo = positionRatio * maxScroll;
+
+        scrollContainer.scrollTo({
+          top: Math.max(0, scrollTo),
+          behavior: "smooth",
+        });
+      }
+    } catch {
+      // Silently fail - selection is still set
+    }
+  }, 100);
+
+  editor.view.focus();
 }
 
 /**

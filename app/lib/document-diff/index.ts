@@ -59,6 +59,15 @@ export type {
   ChangeWithPosition,
   DiffSummary,
   PositionMap,
+  PositionMapWithFormatting,
+} from "./types";
+
+// Types - Formatting
+export type {
+  FormattingChange,
+  FormattingChangeType,
+  FormattingChangeWithPosition,
+  FormattingSpan,
 } from "./types";
 
 // Types - Track changes
@@ -73,9 +82,11 @@ export type { DocumentComparisonProps } from "./types";
 
 // Text extraction utilities
 export {
-  extractTextFromJson,
-  extractTextWithPositions,
   extractContext,
+  extractTextFromJson,
+  extractTextWithFormattingFromEditor,
+  extractTextWithFormattingFromJson,
+  extractTextWithPositions,
   getProseMirrorPosition,
   getProseMirrorRange,
 } from "./text-extraction";
@@ -84,8 +95,10 @@ export {
 export {
   computeChangesWithPositions,
   computeDiffSummary,
+  computeFormattingChanges,
   filterChangesByType,
   getDeletionSearchContext,
+  getMarkTypeLabel,
   hasSufficientContext,
   sortChangesForApplication,
 } from "./diff-computation";
@@ -93,6 +106,7 @@ export {
 // Track changes utilities
 export {
   addCommentsToChanges,
+  applyFormattingTrackChanges,
   applyTrackChanges,
   approveChange,
   buildModifications,
@@ -101,6 +115,7 @@ export {
   createTrackInsertMark,
   getFormattingMarks,
   navigateToChange,
+  navigateToFormattingChange,
   rejectChange,
   sortModificationsForApplication,
 } from "./track-changes";

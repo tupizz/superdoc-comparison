@@ -9,17 +9,22 @@ import { AnimatePresence, motion } from "motion/react";
 const M = motion as any;
 
 import {
+  applyFormattingTrackChanges,
   applyTrackChanges,
   approveChange,
   computeChangesWithPositions,
   computeDiffSummary,
-  extractTextFromJson,
-  extractTextWithPositions,
+  computeFormattingChanges,
+  extractTextWithFormattingFromEditor,
+  extractTextWithFormattingFromJson,
+  getMarkTypeLabel,
   navigateToChange,
+  navigateToFormattingChange,
   rejectChange,
   type ChangeWithPosition,
   type DiffSummary,
-  type PositionMap,
+  type FormattingChangeWithPosition,
+  type PositionMapWithFormatting,
   type ProseMirrorJsonNode,
   type SuperDocEditor,
 } from "@/app/lib/document-diff";
@@ -62,9 +67,12 @@ export default function DocumentComparison({
   modifiedName,
 }: DocumentComparisonProps) {
   const superdocRef = useRef<SuperDoc | null>(null);
-  const posMapRef = useRef<PositionMap | null>(null);
+  const posMapRef = useRef<PositionMapWithFormatting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [changes, setChanges] = useState<ChangeWithPosition[]>([]);
+  const [formattingChanges, setFormattingChanges] = useState<
+    FormattingChangeWithPosition[]
+  >([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>("review");
 
@@ -73,7 +81,7 @@ export default function DocumentComparison({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  const summary: DiffSummary = computeDiffSummary(changes);
+  const summary: DiffSummary = computeDiffSummary(changes, formattingChanges);
 
   const handleDownload = useCallback(() => {
     if (!superdocRef.current) return;
@@ -93,6 +101,19 @@ export default function DocumentComparison({
     setSelectedId(change.id);
     navigateToChange(editor, change);
   }, []);
+
+  const handleNavigateToFormattingChange = useCallback(
+    (change: FormattingChangeWithPosition) => {
+      if (!superdocRef.current) return;
+      const editor = superdocRef.current.activeEditor as unknown as
+        | SuperDocEditor
+        | undefined;
+      if (!editor) return;
+      setSelectedId(change.id);
+      navigateToFormattingChange(editor, change);
+    },
+    []
+  );
 
   const handleApprove = useCallback(
     (
@@ -223,24 +244,53 @@ export default function DocumentComparison({
         return;
 
       const editor = mainSuperdoc.activeEditor as unknown as SuperDocEditor;
-      const originalText = extractTextFromJson(originalJson);
-      const modifiedPosMap: PositionMap = extractTextWithPositions(editor);
+
+      // Extract text and formatting from both documents
+      const originalData = extractTextWithFormattingFromJson(originalJson);
+      const modifiedPosMap = extractTextWithFormattingFromEditor(editor);
       posMapRef.current = modifiedPosMap;
 
+      // Compute content changes
       const computed = computeChangesWithPositions(
-        originalText,
+        originalData.text,
         modifiedPosMap.text
       );
       setChanges(computed);
+
+      // Compute formatting changes
+      const formatChanges = computeFormattingChanges(
+        originalData.text,
+        originalData.formatting,
+        modifiedPosMap.text,
+        modifiedPosMap.formatting
+      );
+      setFormattingChanges(formatChanges);
+
       setIsLoading(false);
 
-      if (superdocRef.current && computed.length > 0) {
+      if (superdocRef.current && (computed.length > 0 || formatChanges.length > 0)) {
         setTimeout(() => {
           if (!superdocRef.current?.activeEditor || !mounted) return;
           const currentEditor = superdocRef.current
             .activeEditor as unknown as SuperDocEditor;
-          applyTrackChanges(currentEditor, computed, modifiedPosMap);
-          const updatedPosMap = extractTextWithPositions(currentEditor);
+
+          // IMPORTANT: Apply formatting track changes FIRST (before content changes)
+          // because content changes (especially deletions) will shift positions
+          if (formatChanges.length > 0) {
+            applyFormattingTrackChanges(
+              currentEditor,
+              formatChanges,
+              modifiedPosMap
+            );
+          }
+
+          // Apply content track changes after formatting
+          if (computed.length > 0) {
+            applyTrackChanges(currentEditor, computed, modifiedPosMap);
+          }
+
+          // Update position map after changes applied
+          const updatedPosMap = extractTextWithFormattingFromEditor(currentEditor);
           posMapRef.current = updatedPosMap;
         }, 300);
       }
@@ -348,9 +398,11 @@ export default function DocumentComparison({
         activeTab={activeTab}
         onTabChange={setActiveTab}
         changes={changes}
+        formattingChanges={formattingChanges}
         selectedId={selectedId}
         isLoading={isLoading}
         onSelectChange={handleNavigateToChange}
+        onSelectFormattingChange={handleNavigateToFormattingChange}
         onApprove={handleApprove}
         onReject={handleReject}
         aiSummary={aiSummary}
@@ -387,8 +439,9 @@ function DocumentHeader({
   onAcceptAll,
   onRejectAll,
 }: DocumentHeaderProps) {
-  const totalChanges =
+  const contentChanges =
     summary.insertions + summary.deletions + summary.replacements;
+  const totalChanges = contentChanges + summary.formattingChanges;
 
   return (
     <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
@@ -461,9 +514,11 @@ interface SidebarProps {
   activeTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
   changes: ChangeWithPosition[];
+  formattingChanges: FormattingChangeWithPosition[];
   selectedId: string | null;
   isLoading: boolean;
   onSelectChange: (change: ChangeWithPosition) => void;
+  onSelectFormattingChange: (change: FormattingChangeWithPosition) => void;
   onApprove: (
     changeId: string,
     changeType: "insertion" | "deletion" | "replacement"
@@ -482,9 +537,11 @@ function Sidebar({
   activeTab,
   onTabChange,
   changes,
+  formattingChanges,
   selectedId,
   isLoading,
   onSelectChange,
+  onSelectFormattingChange,
   onApprove,
   onReject,
   aiSummary,
@@ -616,9 +673,11 @@ function Sidebar({
             >
               <ReviewTab
                 changes={changes}
+                formattingChanges={formattingChanges}
                 selectedId={selectedId}
                 isLoading={isLoading}
                 onSelectChange={onSelectChange}
+                onSelectFormattingChange={onSelectFormattingChange}
                 onApprove={onApprove}
                 onReject={onReject}
               />
@@ -653,9 +712,11 @@ function Sidebar({
 
 interface ReviewTabProps {
   changes: ChangeWithPosition[];
+  formattingChanges: FormattingChangeWithPosition[];
   selectedId: string | null;
   isLoading: boolean;
   onSelectChange: (change: ChangeWithPosition) => void;
+  onSelectFormattingChange: (change: FormattingChangeWithPosition) => void;
   onApprove: (
     changeId: string,
     changeType: "insertion" | "deletion" | "replacement"
@@ -668,20 +729,24 @@ interface ReviewTabProps {
 
 function ReviewTab({
   changes,
+  formattingChanges,
   selectedId,
   isLoading,
   onSelectChange,
+  onSelectFormattingChange,
   onApprove,
   onReject,
 }: ReviewTabProps) {
+  const totalChanges = changes.length + formattingChanges.length;
+
   return (
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-700/50">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {isLoading
             ? "Analyzing..."
-            : `${changes.length} ${
-                changes.length === 1 ? "change" : "changes"
+            : `${totalChanges} ${
+                totalChanges === 1 ? "change" : "changes"
               } to review`}
         </p>
       </div>
@@ -693,7 +758,7 @@ function ReviewTab({
           </div>
         )}
 
-        {!isLoading && changes.length === 0 && (
+        {!isLoading && totalChanges === 0 && (
           <div className="flex flex-col items-center justify-center py-16 px-4">
             <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center mb-3">
               <svg
@@ -719,21 +784,53 @@ function ReviewTab({
           </div>
         )}
 
-        {!isLoading && changes.length > 0 && (
+        {!isLoading && totalChanges > 0 && (
           <div className="divide-y divide-zinc-100 dark:divide-zinc-700/50">
-            <AnimatePresence mode="popLayout">
-              {changes.map((change, index) => (
-                <ChangeCard
-                  key={change.id}
-                  change={change}
-                  index={index}
-                  isSelected={selectedId === change.id}
-                  onSelect={() => onSelectChange(change)}
-                  onApprove={() => onApprove(change.id, change.type)}
-                  onReject={() => onReject(change.id, change.type)}
-                />
-              ))}
-            </AnimatePresence>
+            {/* Content changes section */}
+            {changes.length > 0 && (
+              <>
+                <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-700/30">
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                    Content Changes ({changes.length})
+                  </p>
+                </div>
+                <AnimatePresence mode="popLayout">
+                  {changes.map((change, index) => (
+                    <ChangeCard
+                      key={change.id}
+                      change={change}
+                      index={index}
+                      isSelected={selectedId === change.id}
+                      onSelect={() => onSelectChange(change)}
+                      onApprove={() => onApprove(change.id, change.type)}
+                      onReject={() => onReject(change.id, change.type)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
+
+            {/* Formatting changes section */}
+            {formattingChanges.length > 0 && (
+              <>
+                <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-700/30">
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                    Formatting Changes ({formattingChanges.length})
+                  </p>
+                </div>
+                <AnimatePresence mode="popLayout">
+                  {formattingChanges.map((change, index) => (
+                    <FormattingChangeCard
+                      key={change.id}
+                      change={change}
+                      index={changes.length + index}
+                      isSelected={selectedId === change.id}
+                      onSelect={() => onSelectFormattingChange(change)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1139,6 +1236,159 @@ function ChangeCard({
         >
           Reject
         </M.button>
+      </div>
+    </M.div>
+  );
+}
+
+// =============================================================================
+// Formatting Change Card
+// =============================================================================
+
+interface FormattingChangeCardProps {
+  change: FormattingChangeWithPosition;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+function FormattingChangeCard({
+  change,
+  index,
+  isSelected,
+  onSelect,
+}: FormattingChangeCardProps) {
+  const truncate = (text: string, max: number) =>
+    text.length > max ? text.slice(0, max) + "..." : text;
+
+  const typeConfig = {
+    formatAdded: {
+      label: "Added",
+      description: `${getMarkTypeLabel(change.markType)} applied`,
+      dotColor: "bg-blue-500",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+      ),
+    },
+    formatRemoved: {
+      label: "Removed",
+      description: `${getMarkTypeLabel(change.markType)} removed`,
+      dotColor: "bg-orange-500",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M20 12H4"
+          />
+        </svg>
+      ),
+    },
+    formatModified: {
+      label: "Changed",
+      description: `${getMarkTypeLabel(change.markType)} modified`,
+      dotColor: "bg-purple-500",
+      icon: (
+        <svg
+          className="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+          />
+        </svg>
+      ),
+    },
+  }[change.type];
+
+  // Get human-readable attribute description
+  const getAttrDescription = () => {
+    if (change.type === "formatAdded" && change.newAttrs) {
+      if (change.newAttrs.color) return `Color: ${change.newAttrs.color}`;
+      if (change.newAttrs.href) return `Link: ${change.newAttrs.href}`;
+    }
+    if (change.type === "formatRemoved" && change.oldAttrs) {
+      if (change.oldAttrs.color) return `Was: ${change.oldAttrs.color}`;
+      if (change.oldAttrs.href) return `Was: ${change.oldAttrs.href}`;
+    }
+    if (change.type === "formatModified") {
+      if (change.oldAttrs?.color && change.newAttrs?.color) {
+        return `${change.oldAttrs.color} → ${change.newAttrs.color}`;
+      }
+      if (change.oldAttrs?.href && change.newAttrs?.href) {
+        return `Link changed`;
+      }
+    }
+    return null;
+  };
+
+  const attrDescription = getAttrDescription();
+
+  return (
+    <M.div
+      className={`px-4 py-3 cursor-pointer transition-colors ${
+        isSelected
+          ? "bg-zinc-50 dark:bg-zinc-700/50"
+          : "hover:bg-zinc-50/50 dark:hover:bg-zinc-700/30"
+      }`}
+      onClick={onSelect}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{
+        duration: 0.25,
+        delay: Math.min(index * 0.05, 0.3),
+      }}
+      layout
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-2">
+        <M.span
+          className={`w-2 h-2 rounded-full ${typeConfig.dotColor}`}
+          layoutId={`dot-${change.id}`}
+        />
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5">
+          {typeConfig.icon}
+          {typeConfig.description}
+        </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
+          #{index + 1}
+        </span>
+      </div>
+
+      {/* Content preview */}
+      <div className="mb-2 pl-4">
+        <p className="text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed">
+          &ldquo;{truncate(change.content, 60)}&rdquo;
+        </p>
+        {attrDescription && (
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+            {attrDescription}
+          </p>
+        )}
       </div>
     </M.div>
   );

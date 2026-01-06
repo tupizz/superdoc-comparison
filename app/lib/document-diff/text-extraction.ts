@@ -5,7 +5,14 @@
  */
 
 import type { Node as PMNode } from "prosemirror-model";
-import type { PositionMap, ProseMirrorJsonNode, SuperDocEditor } from "./types";
+import type {
+  FormattingSpan,
+  PositionMap,
+  PositionMapWithFormatting,
+  ProseMirrorJsonNode,
+  ProseMirrorMark,
+  SuperDocEditor,
+} from "./types";
 
 /**
  * Block-level node types that should add newlines between content
@@ -71,6 +78,89 @@ export function extractTextFromJson(node: ProseMirrorJsonNode): string {
 }
 
 /**
+ * Mark types to exclude from formatting comparison (track changes are internal)
+ */
+const EXCLUDED_MARK_TYPES = new Set([
+  "trackInsert",
+  "trackDelete",
+  "trackFormat",
+  "comment",
+  "commentMark",
+]);
+
+/**
+ * Extract text from ProseMirror JSON node structure WITH formatting information.
+ * Used for computing formatting diffs from serialized document data.
+ *
+ * @param node - The ProseMirror JSON node to extract text from
+ * @returns Object with extracted text and formatting spans
+ */
+export function extractTextWithFormattingFromJson(node: ProseMirrorJsonNode): {
+  text: string;
+  formatting: FormattingSpan[];
+} {
+  const formatting: FormattingSpan[] = [];
+  let charIndex = 0;
+
+  function traverse(n: ProseMirrorJsonNode): string {
+    if (!n) return "";
+
+    // Text node - record text and its marks
+    if (n.text) {
+      const marks = (n.marks || []).filter(
+        (m) => !EXCLUDED_MARK_TYPES.has(m.type)
+      );
+
+      if (marks.length > 0) {
+        formatting.push({
+          charStart: charIndex,
+          charEnd: charIndex + n.text.length,
+          marks,
+        });
+      }
+
+      charIndex += n.text.length;
+      return n.text;
+    }
+
+    // No content to traverse
+    if (!n.content) return "";
+
+    const parts: string[] = [];
+
+    for (const child of n.content) {
+      const childType = child.type;
+
+      // Add newline before block elements (except at the start)
+      if (BLOCK_TYPES.has(childType) && parts.length > 0) {
+        const lastPart = parts[parts.length - 1];
+        if (lastPart && !lastPart.endsWith("\n")) {
+          parts.push("\n");
+          charIndex += 1;
+        }
+      }
+
+      // Add space for table cells/rows to separate content
+      if (TABLE_TYPES.has(childType)) {
+        const lastPart = parts[parts.length - 1];
+        if (lastPart && !lastPart.endsWith(" ") && !lastPart.endsWith("\n")) {
+          parts.push(" ");
+          charIndex += 1;
+        }
+      }
+
+      // Recursively extract text from child
+      parts.push(traverse(child));
+    }
+
+    return parts.join("");
+  }
+
+  const text = traverse(node);
+  return { text, formatting };
+}
+
+/**
  * Extract text from a live ProseMirror editor with accurate position mapping.
  * Maps each character index in the extracted text to its ProseMirror position.
  *
@@ -114,6 +204,67 @@ export function extractTextWithPositions(editor: SuperDocEditor): PositionMap {
   });
 
   return { text, charToPos };
+}
+
+/**
+ * Extract text from a live ProseMirror editor with position mapping AND formatting.
+ * This captures both positions and formatting marks for comprehensive comparison.
+ *
+ * Uses the same extraction logic as extractTextWithPositions for consistency.
+ *
+ * @param editor - The SuperDoc editor instance
+ * @returns Object containing extracted text, position mapping, and formatting spans
+ */
+export function extractTextWithFormattingFromEditor(
+  editor: SuperDocEditor
+): PositionMapWithFormatting {
+  const doc = editor.state.doc;
+  const charToPos: number[] = [];
+  const formatting: FormattingSpan[] = [];
+  let text = "";
+
+  // Traverse all nodes in the document
+  doc.descendants((node: PMNode, pos: number) => {
+    // Add newline before block elements (not for the first one)
+    if (node.isBlock && text.length > 0 && !text.endsWith("\n")) {
+      charToPos.push(pos);
+      text += "\n";
+    }
+
+    // Handle text nodes
+    if (node.isText && node.text) {
+      const charStart = text.length;
+
+      // Map each character to its ProseMirror position
+      for (let i = 0; i < node.text.length; i++) {
+        charToPos.push(pos + i);
+      }
+      text += node.text;
+
+      // Record formatting marks (excluding track change marks)
+      const marks: ProseMirrorMark[] = [];
+      for (const mark of node.marks) {
+        if (!EXCLUDED_MARK_TYPES.has(mark.type.name)) {
+          marks.push({
+            type: mark.type.name,
+            attrs: mark.attrs as Record<string, unknown> | undefined,
+          });
+        }
+      }
+
+      if (marks.length > 0) {
+        formatting.push({
+          charStart,
+          charEnd: text.length,
+          marks,
+        });
+      }
+    }
+
+    return true; // Continue traversing
+  });
+
+  return { text, charToPos, formatting };
 }
 
 /**

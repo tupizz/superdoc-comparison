@@ -7,7 +7,13 @@
 
 import { diffChars, type Change as DiffChange } from "diff";
 import { extractContext } from "./text-extraction";
-import type { ChangeWithPosition, DiffSummary } from "./types";
+import type {
+  ChangeWithPosition,
+  DiffSummary,
+  FormattingChangeWithPosition,
+  FormattingSpan,
+  ProseMirrorMark,
+} from "./types";
 
 /**
  * Default context length for deletion positioning
@@ -199,10 +205,14 @@ function createDeletion(
 /**
  * Compute a summary of changes
  *
- * @param changes - Array of changes to summarize
+ * @param changes - Array of content changes to summarize
+ * @param formatChanges - Optional array of formatting changes
  * @returns Summary with counts of each change type
  */
-export function computeDiffSummary(changes: ChangeWithPosition[]): DiffSummary {
+export function computeDiffSummary(
+  changes: ChangeWithPosition[],
+  formatChanges: FormattingChangeWithPosition[] = []
+): DiffSummary {
   let insertions = 0;
   let deletions = 0;
   let replacements = 0;
@@ -221,7 +231,12 @@ export function computeDiffSummary(changes: ChangeWithPosition[]): DiffSummary {
     }
   }
 
-  return { insertions, deletions, replacements };
+  return {
+    insertions,
+    deletions,
+    replacements,
+    formattingChanges: formatChanges.length,
+  };
 }
 
 /**
@@ -293,3 +308,298 @@ export function sortChangesForApplication(
   });
 }
 
+// =============================================================================
+// Formatting Change Detection
+// =============================================================================
+
+/**
+ * Human-readable names for common mark types
+ */
+const MARK_TYPE_LABELS: Record<string, string> = {
+  bold: "Bold",
+  italic: "Italic",
+  underline: "Underline",
+  strike: "Strikethrough",
+  code: "Code",
+  link: "Link",
+  textStyle: "Text Style",
+  highlight: "Highlight",
+  subscript: "Subscript",
+  superscript: "Superscript",
+};
+
+/**
+ * Get human-readable label for a mark type
+ */
+export function getMarkTypeLabel(markType: string): string {
+  return MARK_TYPE_LABELS[markType] || markType;
+}
+
+/**
+ * Get all formatting spans that overlap with a character range
+ */
+function getSpansInRange(
+  formatting: ReadonlyArray<FormattingSpan>,
+  rangeStart: number,
+  rangeEnd: number
+): FormattingSpan[] {
+  return formatting.filter(
+    (span) => span.charStart < rangeEnd && span.charEnd > rangeStart
+  );
+}
+
+/**
+ * Normalize mark for comparison - extract key identifying attributes
+ */
+function normalizeMarkKey(mark: ProseMirrorMark): string {
+  const attrs = mark.attrs || {};
+  // For most marks, type is enough. For some, include key attrs
+  if (mark.type === "link") {
+    return `${mark.type}:${attrs.href || ""}`;
+  }
+  if (mark.type === "textStyle") {
+    return `${mark.type}:${attrs.color || ""}`;
+  }
+  if (mark.type === "highlight") {
+    return `${mark.type}:${attrs.color || ""}`;
+  }
+  return mark.type;
+}
+
+/**
+ * Build a mapping of unchanged text positions between original and modified.
+ * This identifies ranges where text content is the same but formatting might differ.
+ *
+ * @param originalText - Original document text
+ * @param modifiedText - Modified document text
+ * @returns Array of position mappings { origStart, origEnd, modStart, modEnd }
+ */
+function buildUnchangedRanges(
+  originalText: string,
+  modifiedText: string
+): Array<{
+  origStart: number;
+  origEnd: number;
+  modStart: number;
+  modEnd: number;
+  text: string;
+}> {
+  const diffs = diffChars(originalText, modifiedText);
+  const ranges: Array<{
+    origStart: number;
+    origEnd: number;
+    modStart: number;
+    modEnd: number;
+    text: string;
+  }> = [];
+
+  let origPos = 0;
+  let modPos = 0;
+
+  for (const diff of diffs) {
+    if (!diff.added && !diff.removed) {
+      // Unchanged text - record the mapping
+      ranges.push({
+        origStart: origPos,
+        origEnd: origPos + diff.value.length,
+        modStart: modPos,
+        modEnd: modPos + diff.value.length,
+        text: diff.value,
+      });
+      origPos += diff.value.length;
+      modPos += diff.value.length;
+    } else if (diff.removed) {
+      origPos += diff.value.length;
+    } else if (diff.added) {
+      modPos += diff.value.length;
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Compute formatting changes between two documents.
+ * This detects marks that were added, removed, or modified on unchanged text.
+ *
+ * @param originalText - Text from original document
+ * @param originalFormatting - Formatting spans from original document
+ * @param modifiedText - Text from modified document
+ * @param modifiedFormatting - Formatting spans from modified document
+ * @returns Array of formatting changes with positions in modified document
+ */
+export function computeFormattingChanges(
+  originalText: string,
+  originalFormatting: ReadonlyArray<FormattingSpan>,
+  modifiedText: string,
+  modifiedFormatting: ReadonlyArray<FormattingSpan>
+): FormattingChangeWithPosition[] {
+  const changes: FormattingChangeWithPosition[] = [];
+  let changeId = 0;
+
+  // Get ranges where text is unchanged (formatting might have changed)
+  const unchangedRanges = buildUnchangedRanges(originalText, modifiedText);
+
+  for (const range of unchangedRanges) {
+    // Skip very short ranges (whitespace, single chars)
+    if (range.text.trim().length < 2) continue;
+
+    // Get ALL formatting spans that overlap with this range
+    const origSpans = getSpansInRange(
+      originalFormatting,
+      range.origStart,
+      range.origEnd
+    );
+    const modSpans = getSpansInRange(
+      modifiedFormatting,
+      range.modStart,
+      range.modEnd
+    );
+
+    // Compare marks at each character position
+    // We'll iterate through each character position in the range
+    for (let offset = 0; offset < range.text.length; offset++) {
+      const origPos = range.origStart + offset;
+      const modPos = range.modStart + offset;
+
+      // Get marks at this specific position
+      const origMarksHere: ProseMirrorMark[] = [];
+      const modMarksHere: ProseMirrorMark[] = [];
+
+      for (const span of origSpans) {
+        if (origPos >= span.charStart && origPos < span.charEnd) {
+          origMarksHere.push(...span.marks);
+        }
+      }
+
+      for (const span of modSpans) {
+        if (modPos >= span.charStart && modPos < span.charEnd) {
+          modMarksHere.push(...span.marks);
+        }
+      }
+
+      // Compare marks at this position
+      const origMarkKeys = new Set(origMarksHere.map(normalizeMarkKey));
+      const modMarkKeys = new Set(modMarksHere.map(normalizeMarkKey));
+
+      // Find added marks
+      for (const modMark of modMarksHere) {
+        const key = normalizeMarkKey(modMark);
+        if (!origMarkKeys.has(key)) {
+          // This mark was added at this position
+          // Find the extent of this mark in the modified document
+          const modSpan = modSpans.find(
+            (s) =>
+              modPos >= s.charStart &&
+              modPos < s.charEnd &&
+              s.marks.some((m) => normalizeMarkKey(m) === key)
+          );
+
+          if (modSpan) {
+            // Calculate the overlap with the unchanged range
+            const spanStartInRange = Math.max(
+              modSpan.charStart,
+              range.modStart
+            );
+            const spanEndInRange = Math.min(modSpan.charEnd, range.modEnd);
+            const affectedText = modifiedText.slice(
+              spanStartInRange,
+              spanEndInRange
+            );
+
+            changes.push({
+              id: `format-${changeId++}`,
+              type: "formatAdded",
+              content: affectedText.trim().substring(0, 50),
+              markType: modMark.type,
+              newAttrs: modMark.attrs,
+              charStart: spanStartInRange,
+              charEnd: spanEndInRange,
+            });
+          }
+        }
+      }
+
+      // Find removed marks
+      for (const origMark of origMarksHere) {
+        const key = normalizeMarkKey(origMark);
+        if (!modMarkKeys.has(key)) {
+          // This mark was removed at this position
+          const origSpan = origSpans.find(
+            (s) =>
+              origPos >= s.charStart &&
+              origPos < s.charEnd &&
+              s.marks.some((m) => normalizeMarkKey(m) === key)
+          );
+
+          if (origSpan) {
+            // Map to modified document positions
+            const offsetInOrig = origSpan.charStart - range.origStart;
+            const spanStartInMod = range.modStart + Math.max(0, offsetInOrig);
+            const spanLengthInRange = Math.min(
+              origSpan.charEnd - origSpan.charStart,
+              range.modEnd - spanStartInMod
+            );
+            const spanEndInMod = spanStartInMod + spanLengthInRange;
+            const affectedText = modifiedText.slice(
+              spanStartInMod,
+              spanEndInMod
+            );
+
+            changes.push({
+              id: `format-${changeId++}`,
+              type: "formatRemoved",
+              content: affectedText.trim().substring(0, 50),
+              markType: origMark.type,
+              oldAttrs: origMark.attrs,
+              charStart: spanStartInMod,
+              charEnd: spanEndInMod,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Deduplicate changes (merge adjacent spans with same change)
+  return deduplicateFormattingChanges(changes);
+}
+
+/**
+ * Merge adjacent formatting changes that represent the same logical change
+ */
+function deduplicateFormattingChanges(
+  changes: FormattingChangeWithPosition[]
+): FormattingChangeWithPosition[] {
+  if (changes.length === 0) return [];
+
+  // Sort by position
+  const sorted = [...changes].sort((a, b) => a.charStart - b.charStart);
+  const result: FormattingChangeWithPosition[] = [];
+
+  let current = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+
+    // Check if this is the same change type on adjacent/overlapping text
+    const isAdjacent = next.charStart <= current.charEnd + 1;
+    const isSameChange =
+      current.type === next.type && current.markType === next.markType;
+
+    if (isAdjacent && isSameChange) {
+      // Merge: extend the current change
+      current = {
+        ...current,
+        charEnd: Math.max(current.charEnd, next.charEnd),
+        content: current.content, // Keep first content
+      };
+    } else {
+      result.push(current);
+      current = next;
+    }
+  }
+
+  result.push(current);
+  return result;
+}

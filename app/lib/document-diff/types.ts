@@ -158,9 +158,14 @@ export interface SuperDocEditor {
 // =============================================================================
 
 /**
- * Type of change detected in document comparison
+ * Type of change detected in document comparison (content changes)
  */
 export type ChangeType = "insertion" | "deletion" | "replacement";
+
+/**
+ * Type of formatting change detected
+ */
+export type FormattingChangeType = "formatAdded" | "formatRemoved" | "formatModified";
 
 /**
  * Base change information
@@ -196,6 +201,56 @@ export interface PositionMap {
   readonly charToPos: ReadonlyArray<number>;
 }
 
+// =============================================================================
+// Formatting Types
+// =============================================================================
+
+/**
+ * Represents a span of text with its formatting marks
+ */
+export interface FormattingSpan {
+  /** Start character index in extracted text */
+  readonly charStart: number;
+  /** End character index in extracted text */
+  readonly charEnd: number;
+  /** Marks applied to this span (mark type names) */
+  readonly marks: ReadonlyArray<ProseMirrorMark>;
+}
+
+/**
+ * Position map with formatting information
+ */
+export interface PositionMapWithFormatting extends PositionMap {
+  /** Formatting spans for the extracted text */
+  readonly formatting: ReadonlyArray<FormattingSpan>;
+}
+
+/**
+ * A formatting change (mark added, removed, or modified)
+ */
+export interface FormattingChange {
+  readonly id: string;
+  readonly type: FormattingChangeType;
+  /** The text content that had formatting changed */
+  readonly content: string;
+  /** The mark type that changed (e.g., "bold", "italic", "link") */
+  readonly markType: string;
+  /** Mark attributes before change (for formatRemoved/formatModified) */
+  readonly oldAttrs?: ProseMirrorMarkAttrs;
+  /** Mark attributes after change (for formatAdded/formatModified) */
+  readonly newAttrs?: ProseMirrorMarkAttrs;
+}
+
+/**
+ * Formatting change with position information
+ */
+export interface FormattingChangeWithPosition extends FormattingChange {
+  /** Start character position in the modified text */
+  readonly charStart: number;
+  /** End character position in the modified text */
+  readonly charEnd: number;
+}
+
 /**
  * Summary of changes in a comparison
  */
@@ -203,6 +258,7 @@ export interface DiffSummary {
   readonly insertions: number;
   readonly deletions: number;
   readonly replacements: number;
+  readonly formattingChanges: number;
 }
 
 // =============================================================================
