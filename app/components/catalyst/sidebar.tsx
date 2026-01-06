@@ -109,6 +109,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
     <span className={clsx(className, 'relative')}>
       {current && (
         <motion.span
+          // @ts-expect-error - layoutId is valid for motion components with LayoutGroup
           layoutId="current-indicator"
           className="absolute inset-y-2 -left-4 w-0.5 rounded-full bg-zinc-950 dark:bg-white"
         />

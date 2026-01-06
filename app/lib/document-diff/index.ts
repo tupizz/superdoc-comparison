@@ -83,7 +83,6 @@ export {
 // Diff computation utilities
 export {
   computeChangesWithPositions,
-  computeChangesForOriginalDocument,
   computeDiffSummary,
   filterChangesByType,
   getDeletionSearchContext,
@@ -95,7 +94,6 @@ export {
 export {
   addCommentsToChanges,
   applyTrackChanges,
-  applyTrackChangesForSuggesting,
   approveChange,
   buildModifications,
   COMPARISON_USER,

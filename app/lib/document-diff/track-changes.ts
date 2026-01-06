@@ -348,164 +348,6 @@ export function applyTrackChanges(
 }
 
 /**
- * Apply track changes using SuperDoc's suggesting mode.
- * This loads the ORIGINAL document and applies actual changes (deletes/inserts)
- * with track changes enabled, so SuperDoc shows proper "Removed"/"Added" labels.
- *
- * @param editor - The editor instance (should have ORIGINAL document loaded)
- * @param changes - Changes computed from original vs modified
- * @param originalPosMap - Position mapping from the original document
- * @returns Result with success count and errors
- */
-export function applyTrackChangesForSuggesting(
-  editor: SuperDocEditor,
-  changes: ChangeWithPosition[],
-  originalPosMap: PositionMap
-): TrackChangesResult {
-  const errors: string[] = [];
-  let successCount = 0;
-
-  // Check if enableTrackChanges command is available
-  const commands = editor.commands as Record<string, unknown>;
-  if (typeof commands.enableTrackChanges !== "function") {
-    console.warn("enableTrackChanges command not available");
-    return {
-      successCount: 0,
-      totalCount: changes.length,
-      errors: ["enableTrackChanges not available"],
-    };
-  }
-
-  // Enable track changes mode
-  (commands.enableTrackChanges as () => void)();
-
-  try {
-    // Sort changes by position descending (apply from end to start to avoid position shifts)
-    const sortedChanges = [...changes].sort((a, b) => {
-      // For deletions in original: use charStart (position in original text)
-      // For insertions: use insertAt (position where to insert in original)
-      const posA =
-        a.type === "deletion"
-          ? a.charStart ?? 0
-          : a.insertAt ?? a.charStart ?? 0;
-      const posB =
-        b.type === "deletion"
-          ? b.charStart ?? 0
-          : b.insertAt ?? b.charStart ?? 0;
-      return posB - posA;
-    });
-
-    for (const change of sortedChanges) {
-      try {
-        if (change.type === "deletion") {
-          // Text exists in original, not in modified → DELETE it
-          // The change.content is the deleted text, we need to find and delete it
-          if (change.charStart !== undefined && change.charEnd !== undefined) {
-            const pmFrom = originalPosMap.charToPos[change.charStart];
-            const pmTo = originalPosMap.charToPos[change.charEnd - 1];
-
-            if (pmFrom !== undefined && pmTo !== undefined) {
-              // Select and delete the text
-              editor.commands.setTextSelection({ from: pmFrom, to: pmTo + 1 });
-              // Delete by replacing with empty string
-              const { tr } = editor.state;
-              const newTr = tr.deleteSelection();
-              editor.view.dispatch(newTr);
-              successCount++;
-            }
-          }
-        } else if (change.type === "insertion") {
-          // Text exists in modified, not in original → INSERT it
-          // Find where to insert based on context
-          if (change.insertAt !== undefined) {
-            let pmInsertAt = originalPosMap.charToPos[change.insertAt];
-
-            // Fallback: try previous position
-            if (pmInsertAt === undefined && change.insertAt > 0) {
-              const prevPos = originalPosMap.charToPos[change.insertAt - 1];
-              if (prevPos !== undefined) {
-                pmInsertAt = prevPos + 1;
-              }
-            }
-
-            if (pmInsertAt !== undefined) {
-              // Position cursor and insert
-              editor.commands.setTextSelection({
-                from: pmInsertAt,
-                to: pmInsertAt,
-              });
-              const { tr, schema } = editor.state;
-              const textNode = schema.text(change.content);
-              const newTr = tr.insert(pmInsertAt, textNode);
-              editor.view.dispatch(newTr);
-              successCount++;
-            }
-          }
-        } else if (change.type === "replacement") {
-          // Text was replaced: DELETE old text, INSERT new text
-          if (change.charStart !== undefined && change.charEnd !== undefined) {
-            const pmFrom = originalPosMap.charToPos[change.charStart];
-            const pmTo = originalPosMap.charToPos[change.charEnd - 1];
-
-            if (pmFrom !== undefined && pmTo !== undefined) {
-              // Select and replace the text
-              editor.commands.setTextSelection({ from: pmFrom, to: pmTo + 1 });
-              const { tr, schema } = editor.state;
-              const textNode = schema.text(change.content);
-              const newTr = tr.replaceSelectionWith(textNode, false);
-              editor.view.dispatch(newTr);
-              successCount++;
-            }
-          }
-        }
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        errors.push(`Failed to apply ${change.type}: ${errorMsg}`);
-      }
-    }
-  } finally {
-    // Disable track changes mode
-    if (typeof commands.disableTrackChanges === "function") {
-      (commands.disableTrackChanges as () => void)();
-    }
-  }
-
-  console.log(
-    `Track changes (suggesting) applied: ${successCount}/${changes.length}`
-  );
-
-  return { successCount, totalCount: changes.length, errors };
-}
-
-/**
- * Generate a comment description for a change
- */
-function generateCommentText(change: ChangeWithPosition): string {
-  switch (change.type) {
-    case "insertion":
-      return `<p><strong>Added:</strong> "${truncateText(
-        change.content,
-        100
-      )}"</p>`;
-
-    case "deletion":
-      return `<p><strong>Removed:</strong> "${truncateText(
-        change.content,
-        100
-      )}"</p>`;
-
-    case "replacement":
-      return `<p><strong>Changed from:</strong> "${truncateText(
-        change.oldContent || "",
-        50
-      )}"</p><p><strong>To:</strong> "${truncateText(change.content, 50)}"</p>`;
-
-    default:
-      return `<p>Modified content</p>`;
-  }
-}
-
-/**
  * Truncate text to a maximum length with ellipsis
  */
 function truncateText(text: string, maxLength: number): string {
@@ -658,68 +500,195 @@ export function addCommentsToChanges(
     }
   }
 
-  console.log(`Comments added: ${successCount}/${changes.length}`);
-
   return { successCount, totalCount: changes.length, errors };
 }
 
 /**
- * Approve a change by resolving its comment.
- * The track change mark remains but the comment is marked as resolved.
+ * Approve (accept) a change - applies the change to the document permanently.
+ *
+ * For insertions: The inserted text is kept and the track mark is removed.
+ * For deletions: The deleted text is removed from the document.
+ * For replacements: Both the insertion is kept and the deletion is removed.
+ *
+ * NOTE: SuperDoc's native commands don't work with programmatically-created marks
+ * because they're not registered in SuperDoc's internal track changes state.
+ * We use direct ProseMirror transactions instead.
  *
  * @param editor - The editor instance
  * @param changeId - The change ID to approve
+ * @param changeType - The type of change (insertion, deletion, replacement)
  * @returns True if successful
  */
 export function approveChange(
   editor: SuperDocEditor,
-  changeId: string
+  changeId: string,
+  changeType?: "insertion" | "deletion" | "replacement"
 ): boolean {
-  const commentId = `comment-${changeId}`;
+  const result = manuallyAcceptChange(editor, changeId, changeType);
 
-  if (typeof editor.commands.resolveComment !== "function") {
-    console.warn("resolveComment command not available");
-    return false;
+  // Also try to remove the comment if present
+  if (result) {
+    const commands = editor.commands as Record<string, unknown>;
+    if (typeof commands.removeComment === "function") {
+      try {
+        (commands.removeComment as (opts: { commentId: string }) => void)({
+          commentId: `comment-${changeId}`,
+        });
+      } catch {
+        // Comment may not exist, ignore
+      }
+    }
   }
 
-  try {
-    editor.commands.resolveComment({ commentId });
-    console.log(`Change ${changeId} approved`);
-    return true;
-  } catch (e) {
-    console.warn(`Failed to approve change ${changeId}:`, e);
-    return false;
-  }
+  return result;
 }
 
 /**
- * Reject a change by removing its comment.
- * Note: This only removes the comment, not the track change mark itself.
- * To fully reject, you would also need to accept/reject the track change.
+ * Manually accept a change by removing track marks and keeping/removing content appropriately
+ */
+function manuallyAcceptChange(
+  editor: SuperDocEditor,
+  changeId: string,
+  _changeType?: "insertion" | "deletion" | "replacement"
+): boolean {
+  const schema = editor.schema;
+  const trackInsertMark = schema.marks.trackInsert;
+  const trackDeleteMark = schema.marks.trackDelete;
+
+  if (!trackInsertMark || !trackDeleteMark) {
+    return false;
+  }
+
+  const insertMarkId = `insert-${changeId}`;
+  const deleteMarkId = `delete-${changeId}`;
+
+  let tr = editor.state.tr;
+  let modified = false;
+
+  // Find all marks for this change
+  const marks = findTrackChangeMarks(editor);
+
+  // Process marks from end to start to avoid position shifts
+  const relevantMarks = marks
+    .filter((m) => m.id === insertMarkId || m.id === deleteMarkId)
+    .sort((a, b) => b.from - a.from);
+
+  for (const mark of relevantMarks) {
+    if (mark.id === insertMarkId) {
+      // For insertions: keep the text, just remove the mark
+      const mappedFrom = tr.mapping.map(mark.from);
+      const mappedTo = tr.mapping.map(mark.to);
+      tr = tr.removeMark(mappedFrom, mappedTo, trackInsertMark);
+      modified = true;
+    } else if (mark.id === deleteMarkId) {
+      // For deletions: remove the deleted text entirely
+      const mappedFrom = tr.mapping.map(mark.from);
+      const mappedTo = tr.mapping.map(mark.to);
+      tr = tr.delete(mappedFrom, mappedTo);
+      modified = true;
+    }
+  }
+
+  if (modified) {
+    editor.view.dispatch(tr);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Reject a change - reverts the change in the document.
+ *
+ * For insertions: The inserted text is removed from the document.
+ * For deletions: The deleted text is restored to the document.
+ * For replacements: The new text is removed and old text is restored.
+ *
+ * NOTE: SuperDoc's native commands don't work with programmatically-created marks
+ * because they're not registered in SuperDoc's internal track changes state.
+ * We use direct ProseMirror transactions instead.
  *
  * @param editor - The editor instance
  * @param changeId - The change ID to reject
+ * @param changeType - The type of change (insertion, deletion, replacement)
  * @returns True if successful
  */
 export function rejectChange(
   editor: SuperDocEditor,
-  changeId: string
+  changeId: string,
+  changeType?: "insertion" | "deletion" | "replacement"
 ): boolean {
-  const commentId = `comment-${changeId}`;
+  const result = manuallyRejectChange(editor, changeId, changeType);
 
-  if (typeof editor.commands.removeComment !== "function") {
-    console.warn("removeComment command not available");
+  // Also try to remove the comment if present
+  if (result) {
+    const commands = editor.commands as Record<string, unknown>;
+    if (typeof commands.removeComment === "function") {
+      try {
+        (commands.removeComment as (opts: { commentId: string }) => void)({
+          commentId: `comment-${changeId}`,
+        });
+      } catch {
+        // Comment may not exist, ignore
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Manually reject a change by removing/restoring content appropriately
+ */
+function manuallyRejectChange(
+  editor: SuperDocEditor,
+  changeId: string,
+  _changeType?: "insertion" | "deletion" | "replacement"
+): boolean {
+  const schema = editor.schema;
+  const trackInsertMark = schema.marks.trackInsert;
+  const trackDeleteMark = schema.marks.trackDelete;
+
+  if (!trackInsertMark || !trackDeleteMark) {
     return false;
   }
 
-  try {
-    editor.commands.removeComment({ commentId });
-    console.log(`Change ${changeId} rejected`);
+  const insertMarkId = `insert-${changeId}`;
+  const deleteMarkId = `delete-${changeId}`;
+
+  let tr = editor.state.tr;
+  let modified = false;
+
+  // Find all marks for this change
+  const marks = findTrackChangeMarks(editor);
+
+  // Process marks from end to start to avoid position shifts
+  const relevantMarks = marks
+    .filter((m) => m.id === insertMarkId || m.id === deleteMarkId)
+    .sort((a, b) => b.from - a.from);
+
+  for (const mark of relevantMarks) {
+    if (mark.id === insertMarkId) {
+      // For insertions: remove the inserted text (reject = undo the insertion)
+      const mappedFrom = tr.mapping.map(mark.from);
+      const mappedTo = tr.mapping.map(mark.to);
+      tr = tr.delete(mappedFrom, mappedTo);
+      modified = true;
+    } else if (mark.id === deleteMarkId) {
+      // For deletions: keep the text, just remove the mark (reject = keep original)
+      const mappedFrom = tr.mapping.map(mark.from);
+      const mappedTo = tr.mapping.map(mark.to);
+      tr = tr.removeMark(mappedFrom, mappedTo, trackDeleteMark);
+      modified = true;
+    }
+  }
+
+  if (modified) {
+    editor.view.dispatch(tr);
     return true;
-  } catch (e) {
-    console.warn(`Failed to reject change ${changeId}:`, e);
-    return false;
   }
+
+  return false;
 }
 
 /**

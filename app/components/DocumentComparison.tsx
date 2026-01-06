@@ -100,22 +100,53 @@ export default function DocumentComparison({
   }, []);
 
   // Handle approving a change
-  const handleApprove = useCallback((changeId: string) => {
-    if (!superdocRef.current) return;
+  const handleApprove = useCallback(
+    (
+      changeId: string,
+      changeType: "insertion" | "deletion" | "replacement"
+    ) => {
+      if (!superdocRef.current) return;
 
-    const editor = superdocRef.current.activeEditor as unknown as
-      | SuperDocEditor
-      | undefined;
-    if (!editor) return;
+      const editor = superdocRef.current.activeEditor as unknown as
+        | SuperDocEditor
+        | undefined;
+      if (!editor) return;
 
-    const success = approveChange(editor, changeId);
-    if (success) {
-      setReviewedChanges((prev) => ({ ...prev, [changeId]: "approved" }));
-    }
-  }, []);
+      const success = approveChange(editor, changeId, changeType);
+      if (success) {
+        setReviewedChanges((prev) => ({ ...prev, [changeId]: "approved" }));
+        // Remove the change from the list since it's now part of the document
+        setChanges((prev) => prev.filter((c) => c.id !== changeId));
+      }
+    },
+    []
+  );
 
   // Handle rejecting a change
-  const handleReject = useCallback((changeId: string) => {
+  const handleReject = useCallback(
+    (
+      changeId: string,
+      changeType: "insertion" | "deletion" | "replacement"
+    ) => {
+      if (!superdocRef.current) return;
+
+      const editor = superdocRef.current.activeEditor as unknown as
+        | SuperDocEditor
+        | undefined;
+      if (!editor) return;
+
+      const success = rejectChange(editor, changeId, changeType);
+      if (success) {
+        setReviewedChanges((prev) => ({ ...prev, [changeId]: "rejected" }));
+        // Remove the change from the list since it's been reverted
+        setChanges((prev) => prev.filter((c) => c.id !== changeId));
+      }
+    },
+    []
+  );
+
+  // Handle accepting all changes
+  const handleAcceptAll = useCallback(() => {
     if (!superdocRef.current) return;
 
     const editor = superdocRef.current.activeEditor as unknown as
@@ -123,11 +154,42 @@ export default function DocumentComparison({
       | undefined;
     if (!editor) return;
 
-    const success = rejectChange(editor, changeId);
-    if (success) {
-      setReviewedChanges((prev) => ({ ...prev, [changeId]: "rejected" }));
+    // Accept all changes one by one
+    let successCount = 0;
+    for (const change of changes) {
+      if (approveChange(editor, change.id, change.type)) {
+        successCount++;
+      }
     }
-  }, []);
+
+    if (successCount > 0) {
+      setChanges([]);
+      setReviewedChanges({});
+    }
+  }, [changes]);
+
+  // Handle rejecting all changes
+  const handleRejectAll = useCallback(() => {
+    if (!superdocRef.current) return;
+
+    const editor = superdocRef.current.activeEditor as unknown as
+      | SuperDocEditor
+      | undefined;
+    if (!editor) return;
+
+    // Reject all changes one by one
+    let successCount = 0;
+    for (const change of changes) {
+      if (rejectChange(editor, change.id, change.type)) {
+        successCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      setChanges([]);
+      setReviewedChanges({});
+    }
+  }, [changes]);
 
   // Main effect: Initialize SuperDoc instances and apply track changes
   useEffect(() => {
@@ -178,10 +240,14 @@ export default function DocumentComparison({
         setTimeout(() => {
           if (!superdocRef.current?.activeEditor || !mounted) return;
 
-          const currentEditor =
-            superdocRef.current.activeEditor as unknown as SuperDocEditor;
+          const currentEditor = superdocRef.current
+            .activeEditor as unknown as SuperDocEditor;
 
-          const result = applyTrackChanges(currentEditor, computed, modifiedPosMap);
+          const result = applyTrackChanges(
+            currentEditor,
+            computed,
+            modifiedPosMap
+          );
 
           // Re-extract position map AFTER track changes applied
           // (deletions insert text, changing positions)
@@ -232,7 +298,7 @@ export default function DocumentComparison({
         toolbar: {
           selector: "#superdoc-toolbar",
           groups: {
-            left: ["undo", "redo"],
+            // left: ["undo", "redo"],
             center: [
               "fontFamily",
               "fontSize",
@@ -242,7 +308,6 @@ export default function DocumentComparison({
               "color",
               "highlight",
             ],
-            right: ["documentMode"],
           },
         },
       },
@@ -313,7 +378,10 @@ export default function DocumentComparison({
           originalName={originalName}
           summary={summary}
           isLoading={isLoading}
+          hasChanges={changes.length > 0}
           onDownload={handleDownload}
+          onAcceptAll={handleAcceptAll}
+          onRejectAll={handleRejectAll}
         />
         {/* Toolbar container */}
         <div
@@ -349,7 +417,10 @@ interface DocumentHeaderProps {
   originalName: string;
   summary: DiffSummary;
   isLoading: boolean;
+  hasChanges: boolean;
   onDownload: () => void;
+  onAcceptAll: () => void;
+  onRejectAll: () => void;
 }
 
 function DocumentHeader({
@@ -357,7 +428,10 @@ function DocumentHeader({
   originalName,
   summary,
   isLoading,
+  hasChanges,
   onDownload,
+  onAcceptAll,
+  onRejectAll,
 }: DocumentHeaderProps) {
   return (
     <div className="bg-zinc-800 px-4 py-2 rounded-t-lg border-b border-zinc-700 flex items-center justify-between">
@@ -377,6 +451,23 @@ function DocumentHeader({
               <span className="text-yellow-400">↔{summary.replacements}</span>
             )}
           </div>
+        )}
+        {/* Accept/Reject All buttons */}
+        {hasChanges && (
+          <>
+            <button
+              onClick={onAcceptAll}
+              className="px-3 py-1 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+            >
+              Accept All
+            </button>
+            <button
+              onClick={onRejectAll}
+              className="px-3 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+            >
+              Reject All
+            </button>
+          </>
         )}
         <button
           onClick={onDownload}
@@ -404,8 +495,14 @@ interface ChangesSidebarProps {
   isLoading: boolean;
   reviewedChanges: Record<string, "approved" | "rejected">;
   onSelectChange: (change: ChangeWithPosition) => void;
-  onApprove: (changeId: string) => void;
-  onReject: (changeId: string) => void;
+  onApprove: (
+    changeId: string,
+    changeType: "insertion" | "deletion" | "replacement"
+  ) => void;
+  onReject: (
+    changeId: string,
+    changeType: "insertion" | "deletion" | "replacement"
+  ) => void;
 }
 
 function ChangesSidebar({
@@ -453,8 +550,8 @@ function ChangesSidebar({
             isSelected={selectedId === change.id}
             reviewStatus={reviewedChanges[change.id]}
             onSelect={() => onSelectChange(change)}
-            onApprove={() => onApprove(change.id)}
-            onReject={() => onReject(change.id)}
+            onApprove={() => onApprove(change.id, change.type)}
+            onReject={() => onReject(change.id, change.type)}
           />
         ))}
       </div>
@@ -494,8 +591,8 @@ function ChangeCard({
         reviewStatus === "approved"
           ? "border-l-2 border-green-500"
           : reviewStatus === "rejected"
-            ? "border-l-2 border-red-500"
-            : ""
+          ? "border-l-2 border-red-500"
+          : ""
       }`}
     >
       <button

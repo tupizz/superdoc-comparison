@@ -64,6 +64,7 @@ export const NavbarItem = forwardRef(function NavbarItem(
     <span className={clsx(className, 'relative')}>
       {current && (
         <motion.span
+          // @ts-expect-error - layoutId is valid for motion components with LayoutGroup
           layoutId="current-indicator"
           className="absolute inset-x-2 -bottom-2.5 h-0.5 rounded-full bg-zinc-950 dark:bg-white"
         />
