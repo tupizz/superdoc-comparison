@@ -656,6 +656,19 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 ---
 
+## AI-Assisted Development
+
+This project was developed with AI assistance as a coding companion. Specifically, AI tools were used for:
+
+- **Documentation**: Generating and refining technical documentation, including this README
+- **Code Review**: Getting suggestions for edge cases and potential improvements
+- **Debugging**: Troubleshooting complex ProseMirror position mapping issues
+- **Boilerplate**: Accelerating repetitive tasks like TypeScript type definitions
+
+The core architecture decisions, algorithm design, and implementation logic were human-driven. AI served as a productivity multiplier rather than a replacement for engineering judgment.
+
+---
+
 ## License
 
 MIT

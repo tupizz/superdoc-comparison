@@ -3,16 +3,16 @@
 import {
   ArrowPathIcon,
   ArrowRightIcon,
+  BoltIcon,
   CheckCircleIcon,
   DocumentTextIcon,
-  SparklesIcon,
   ShieldCheckIcon,
-  BoltIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
+import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import DocumentUploader from "./DocumentUploader";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,7 +59,8 @@ export default function DocComparisonApp() {
   }, []);
 
   // Determine current step
-  const currentStep = !v1Document && !v2Document ? 1 : v1Document && v2Document ? 3 : 2;
+  const currentStep =
+    !v1Document && !v2Document ? 1 : v1Document && v2Document ? 3 : 2;
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -71,7 +72,11 @@ export default function DocComparisonApp() {
 
       {/* Header */}
       <header className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-xl sticky top-0 z-40">
-        <div className={`mx-auto px-6 h-16 flex items-center justify-between ${isComparing ? 'max-w-[1920px]' : 'max-w-7xl'}`}>
+        <div
+          className={`mx-auto px-6 h-16 flex items-center justify-between ${
+            isComparing ? "max-w-[1920px]" : "max-w-7xl"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl blur opacity-40" />
@@ -80,9 +85,7 @@ export default function DocComparisonApp() {
               </div>
             </div>
             <div>
-              <span className="text-sm font-semibold text-white">
-                Superdoc
-              </span>
+              <span className="text-sm font-semibold text-white">SuperDoc</span>
               <span className="text-sm text-zinc-500 ml-1.5">
                 Document Comparison
               </span>
@@ -107,7 +110,11 @@ export default function DocComparisonApp() {
       </header>
 
       {/* Main Content */}
-      <main className={`mx-auto px-6 ${isComparing ? 'max-w-[1920px]' : 'max-w-7xl'}`}>
+      <main
+        className={`mx-auto px-6 ${
+          isComparing ? "max-w-[1920px]" : "max-w-7xl"
+        }`}
+      >
         <AnimatePresence mode="wait">
           {/* Upload State */}
           {!isComparing && (
@@ -137,7 +144,10 @@ export default function DocComparisonApp() {
                   className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight"
                 >
                   Compare your
-                  <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent"> documents</span>
+                  <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">
+                    {" "}
+                    documents
+                  </span>
                 </M.h1>
 
                 <M.p
@@ -146,8 +156,9 @@ export default function DocComparisonApp() {
                   transition={{ delay: 0.2 }}
                   className="text-lg text-zinc-400"
                 >
-                  Upload two versions of your document to instantly see what changed.
-                  Get AI-powered summaries and review changes with ease.
+                  Upload two versions of your document to instantly see what
+                  changed. Get AI-powered summaries and review changes with
+                  ease.
                 </M.p>
               </div>
 
@@ -160,9 +171,24 @@ export default function DocComparisonApp() {
               >
                 <nav aria-label="Progress">
                   <ol className="flex items-center">
-                    <StepItem step={1} currentStep={currentStep} label="Original" isLast={false} />
-                    <StepItem step={2} currentStep={currentStep} label="Modified" isLast={false} />
-                    <StepItem step={3} currentStep={currentStep} label="Compare" isLast={true} />
+                    <StepItem
+                      step={1}
+                      currentStep={currentStep}
+                      label="Original"
+                      isLast={false}
+                    />
+                    <StepItem
+                      step={2}
+                      currentStep={currentStep}
+                      label="Modified"
+                      isLast={false}
+                    />
+                    <StepItem
+                      step={3}
+                      currentStep={currentStep}
+                      label="Compare"
+                      isLast={true}
+                    />
                   </ol>
                 </nav>
               </M.div>
@@ -282,16 +308,17 @@ function StepItem({
   const isActive = currentStep === step;
 
   return (
-    <li className={`flex items-center ${!isLast ? '' : ''}`}>
+    <li className={`flex items-center ${!isLast ? "" : ""}`}>
       <div className="flex flex-col items-center">
         <div
           className={`
             w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all
-            ${isComplete
-              ? "bg-violet-500 text-white"
-              : isActive
-              ? "bg-zinc-900 text-violet-400 ring-2 ring-violet-500"
-              : "bg-zinc-900 text-zinc-500 ring-1 ring-zinc-700"
+            ${
+              isComplete
+                ? "bg-violet-500 text-white"
+                : isActive
+                ? "bg-zinc-900 text-violet-400 ring-2 ring-violet-500"
+                : "bg-zinc-900 text-zinc-500 ring-1 ring-zinc-700"
             }
           `}
         >
@@ -299,7 +326,11 @@ function StepItem({
         </div>
         <span
           className={`text-xs font-medium mt-2 ${
-            isActive ? "text-violet-400" : isComplete ? "text-white" : "text-zinc-500"
+            isActive
+              ? "text-violet-400"
+              : isComplete
+              ? "text-white"
+              : "text-zinc-500"
           }`}
         >
           {label}
@@ -350,7 +381,11 @@ function UploadCard({
         className={`
           absolute -inset-px rounded-2xl transition-opacity duration-300
           ${isActive || isComplete ? "opacity-100" : "opacity-0"}
-          ${isComplete ? "bg-gradient-to-br from-emerald-500/50 to-emerald-600/50" : "bg-gradient-to-br from-violet-500/50 to-indigo-500/50"}
+          ${
+            isComplete
+              ? "bg-gradient-to-br from-emerald-500/50 to-emerald-600/50"
+              : "bg-gradient-to-br from-violet-500/50 to-indigo-500/50"
+          }
         `}
       />
 
@@ -362,7 +397,13 @@ function UploadCard({
               <span
                 className={`
                   w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold
-                  ${isComplete ? "bg-emerald-500 text-white" : isActive ? "bg-violet-500 text-white" : "bg-zinc-800 text-zinc-500"}
+                  ${
+                    isComplete
+                      ? "bg-emerald-500 text-white"
+                      : isActive
+                      ? "bg-violet-500 text-white"
+                      : "bg-zinc-800 text-zinc-500"
+                  }
                 `}
               >
                 {isComplete ? <CheckIcon className="h-3 w-3" /> : step}
@@ -418,7 +459,9 @@ function UploadCard({
             >
               <DocumentUploader
                 onUpload={onUpload}
-                label={`Drop your ${step === 1 ? "original" : "modified"} document`}
+                label={`Drop your ${
+                  step === 1 ? "original" : "modified"
+                } document`}
                 disabled={!isActive && step !== 1}
               />
             </M.div>
