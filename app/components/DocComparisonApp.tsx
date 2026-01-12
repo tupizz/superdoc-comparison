@@ -169,35 +169,66 @@ export default function DocComparisonApp() {
                 </M.p>
               </div>
 
-              {/* Steps Indicator */}
+              {/* Elegant Steps Section */}
               <M.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
-                className="flex justify-center mb-12"
+                className="max-w-4xl mx-auto mb-12"
               >
-                <nav aria-label="Progress">
-                  <ol className="flex items-center">
-                    <StepItem
-                      step={1}
-                      currentStep={currentStep}
-                      label="Original"
-                      isLast={false}
-                    />
-                    <StepItem
-                      step={2}
-                      currentStep={currentStep}
-                      label="Modified"
-                      isLast={false}
-                    />
-                    <StepItem
-                      step={3}
-                      currentStep={currentStep}
-                      label="Compare"
-                      isLast={true}
-                    />
-                  </ol>
-                </nav>
+                {/* Progress Steps */}
+                <div className="relative">
+                  {/* Background Track */}
+                  <div className="absolute top-6 left-0 right-0 h-0.5 bg-zinc-800 hidden md:block" />
+
+                  {/* Animated Progress Track */}
+                  <M.div
+                    className="absolute top-6 left-0 h-0.5 bg-gradient-to-r from-violet-500 to-indigo-500 hidden md:block"
+                    initial={{ width: "0%" }}
+                    animate={{
+                      width:
+                        currentStep === 1
+                          ? "0%"
+                          : currentStep === 2
+                          ? "50%"
+                          : "100%",
+                    }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }}
+                  />
+
+                  {/* Step Items */}
+                  <nav aria-label="Progress" className="relative">
+                    <ol className="flex flex-col md:flex-row md:justify-between gap-8 md:gap-0">
+                      <StepItemEnhanced
+                        step={1}
+                        currentStep={currentStep}
+                        label="Upload Original"
+                        description="Base version"
+                        icon={
+                          <DocumentTextIcon className="h-5 w-5" />
+                        }
+                      />
+                      <StepItemEnhanced
+                        step={2}
+                        currentStep={currentStep}
+                        label="Upload Modified"
+                        description="Changed version"
+                        icon={
+                          <DocumentDuplicateIcon className="h-5 w-5" />
+                        }
+                      />
+                      <StepItemEnhanced
+                        step={3}
+                        currentStep={currentStep}
+                        label="Compare"
+                        description="Review changes"
+                        icon={
+                          <SparklesIcon className="h-5 w-5" />
+                        }
+                      />
+                    </ol>
+                  </nav>
+                </div>
               </M.div>
 
               {/* Upload Cards */}
@@ -205,10 +236,10 @@ export default function DocComparisonApp() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8"
+                className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto"
               >
                 {/* Original Document */}
-                <UploadCard
+                <UploadCardEnhanced
                   title="Original Document"
                   subtitle="The base version to compare against"
                   step={1}
@@ -217,10 +248,11 @@ export default function DocComparisonApp() {
                   document={v1Document}
                   onUpload={handleV1Upload}
                   onRemove={() => setV1Document(null)}
+                  icon={<DocumentTextIcon className="h-6 w-6" />}
                 />
 
                 {/* Modified Document */}
-                <UploadCard
+                <UploadCardEnhanced
                   title="Modified Document"
                   subtitle="The updated version with changes"
                   step={2}
@@ -229,6 +261,7 @@ export default function DocComparisonApp() {
                   document={v2Document}
                   onUpload={handleV2Upload}
                   onRemove={() => setV2Document(null)}
+                  icon={<DocumentDuplicateIcon className="h-6 w-6" />}
                 />
               </M.div>
 
@@ -236,17 +269,30 @@ export default function DocComparisonApp() {
               <AnimatePresence>
                 {v1Document && v2Document && (
                   <M.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="flex justify-center"
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                    className="flex justify-center mt-10"
                   >
-                    <button className="group relative inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold text-white rounded-xl overflow-hidden transition-all hover:scale-105">
-                      <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600" />
-                      <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <span className="relative">Start Comparison</span>
-                      <ArrowRightIcon className="relative h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
+                    <div className="relative">
+                      {/* Glow effect */}
+                      <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+
+                      <button className="group relative inline-flex items-center gap-3 px-10 py-4 text-base font-semibold text-white rounded-xl overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]">
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                        </div>
+
+                        <CheckCircleIcon className="relative h-5 w-5" />
+                        <span className="relative">Start Comparison</span>
+                        <ArrowRightIcon className="relative h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </div>
                   </M.div>
                 )}
               </AnimatePresence>
@@ -538,65 +584,96 @@ export default function DocComparisonApp() {
   );
 }
 
-// Step Item Component (includes connector)
-function StepItem({
+// Enhanced Step Item Component
+function StepItemEnhanced({
   step,
   currentStep,
   label,
-  isLast,
+  description,
+  icon,
 }: {
   step: number;
   currentStep: number;
   label: string;
-  isLast: boolean;
+  description: string;
+  icon: React.ReactNode;
 }) {
   const isComplete = currentStep > step;
   const isActive = currentStep === step;
 
   return (
-    <li className={`flex items-center ${!isLast ? "" : ""}`}>
-      <div className="flex flex-col items-center">
+    <li className="flex-1 flex flex-row md:flex-col items-center md:items-center gap-4 md:gap-0">
+      {/* Step Circle */}
+      <M.div
+        className="relative"
+        animate={{
+          scale: isActive ? 1.1 : 1,
+        }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+      >
+        {/* Glow effect for active */}
+        {isActive && (
+          <M.div
+            className="absolute -inset-2 bg-violet-500/30 rounded-full blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          />
+        )}
+
         <div
           className={`
-            w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all
+            relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300
             ${
               isComplete
-                ? "bg-violet-500 text-white"
+                ? "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
                 : isActive
-                ? "bg-zinc-900 text-violet-400 ring-2 ring-violet-500"
-                : "bg-zinc-900 text-zinc-500 ring-1 ring-zinc-700"
+                ? "bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25"
+                : "bg-zinc-800 text-zinc-500 border border-zinc-700"
             }
           `}
         >
-          {isComplete ? <CheckIcon className="h-5 w-5" /> : step}
+          {isComplete ? (
+            <M.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 15 }}
+            >
+              <CheckIcon className="h-6 w-6" />
+            </M.div>
+          ) : (
+            icon
+          )}
         </div>
-        <span
-          className={`text-xs font-medium mt-2 ${
+      </M.div>
+
+      {/* Label */}
+      <div className="md:mt-4 text-left md:text-center">
+        <p
+          className={`text-sm font-semibold transition-colors ${
             isActive
-              ? "text-violet-400"
-              : isComplete
               ? "text-white"
+              : isComplete
+              ? "text-emerald-400"
               : "text-zinc-500"
           }`}
         >
           {label}
-        </span>
-      </div>
-
-      {/* Connector line */}
-      {!isLast && (
-        <div
-          className={`w-24 h-0.5 mx-3 mb-6 transition-colors ${
-            currentStep > step ? "bg-violet-500" : "bg-zinc-800"
+        </p>
+        <p
+          className={`text-xs transition-colors ${
+            isActive ? "text-zinc-400" : "text-zinc-600"
           }`}
-        />
-      )}
+        >
+          {description}
+        </p>
+      </div>
     </li>
   );
 }
 
-// Upload Card Component
-function UploadCard({
+// Enhanced Upload Card Component
+function UploadCardEnhanced({
   title,
   subtitle,
   step,
@@ -605,6 +682,7 @@ function UploadCard({
   document,
   onUpload,
   onRemove,
+  icon,
 }: {
   title: string;
   subtitle: string;
@@ -614,107 +692,162 @@ function UploadCard({
   document: DocumentVersion | null;
   onUpload: (file: File, base64: string) => void;
   onRemove: () => void;
+  icon: React.ReactNode;
 }) {
   return (
-    <div
-      className={`
-        relative rounded-2xl transition-all duration-300
-        ${isActive ? "ring-2 ring-violet-500/50" : ""}
-      `}
+    <M.div
+      className="relative"
+      animate={{
+        y: isActive ? -4 : 0,
+      }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
     >
-      {/* Gradient border effect */}
+      {/* Glow effect */}
       <div
         className={`
-          absolute -inset-px rounded-2xl transition-opacity duration-300
-          ${isActive || isComplete ? "opacity-100" : "opacity-0"}
+          absolute -inset-px rounded-2xl transition-all duration-500
           ${
             isComplete
-              ? "bg-gradient-to-br from-emerald-500/50 to-emerald-600/50"
-              : "bg-gradient-to-br from-violet-500/50 to-indigo-500/50"
+              ? "bg-gradient-to-br from-emerald-500/40 to-emerald-600/40 blur-sm"
+              : isActive
+              ? "bg-gradient-to-br from-violet-500/40 to-indigo-500/40 blur-sm"
+              : "opacity-0"
           }
         `}
       />
 
-      <div className="relative bg-zinc-900 rounded-2xl p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span
+      <div
+        className={`
+          relative rounded-2xl transition-all duration-300 overflow-hidden
+          ${
+            isComplete
+              ? "bg-zinc-900 border-2 border-emerald-500/50"
+              : isActive
+              ? "bg-zinc-900 border-2 border-violet-500/50"
+              : "bg-zinc-900/80 border border-zinc-800"
+          }
+        `}
+      >
+        {/* Header with icon */}
+        <div className="p-6 pb-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-4">
+              {/* Icon */}
+              <div
                 className={`
-                  w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold
+                  w-12 h-12 rounded-xl flex items-center justify-center transition-all
                   ${
                     isComplete
-                      ? "bg-emerald-500 text-white"
+                      ? "bg-emerald-500/10 text-emerald-400"
                       : isActive
-                      ? "bg-violet-500 text-white"
+                      ? "bg-violet-500/10 text-violet-400"
                       : "bg-zinc-800 text-zinc-500"
                   }
                 `}
               >
-                {isComplete ? <CheckIcon className="h-3 w-3" /> : step}
-              </span>
-              <h3 className="text-sm font-semibold text-white">{title}</h3>
+                {isComplete ? <CheckIcon className="h-6 w-6" /> : icon}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-white">{title}</h3>
+                  {isComplete && (
+                    <M.span
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium"
+                    >
+                      <CheckCircleIcon className="h-3 w-3" />
+                      Ready
+                    </M.span>
+                  )}
+                </div>
+                <p className="text-sm text-zinc-500 mt-0.5">{subtitle}</p>
+              </div>
             </div>
-            <p className="text-xs text-zinc-500">{subtitle}</p>
+
+            {/* Step badge */}
+            <div
+              className={`
+                w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                ${
+                  isComplete
+                    ? "bg-emerald-500 text-white"
+                    : isActive
+                    ? "bg-violet-500 text-white"
+                    : "bg-zinc-800 text-zinc-500"
+                }
+              `}
+            >
+              {isComplete ? <CheckIcon className="h-4 w-4" /> : step}
+            </div>
           </div>
-          {isComplete && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-              <CheckCircleIcon className="h-3 w-3" />
-              Ready
-            </span>
-          )}
         </div>
 
         {/* Content */}
-        <AnimatePresence mode="wait">
-          {document ? (
-            <M.div
-              key="uploaded"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-zinc-800/50 rounded-xl p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500/20 to-indigo-500/20 flex items-center justify-center">
-                  <DocumentTextIcon className="h-5 w-5 text-violet-400" />
+        <div className="px-6 pb-6">
+          <AnimatePresence mode="wait">
+            {document ? (
+              <M.div
+                key="uploaded"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50"
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`
+                      w-12 h-12 rounded-xl flex items-center justify-center
+                      ${
+                        isComplete
+                          ? "bg-emerald-500/10"
+                          : "bg-gradient-to-br from-violet-500/10 to-indigo-500/10"
+                      }
+                    `}
+                  >
+                    <DocumentTextIcon
+                      className={`h-6 w-6 ${
+                        isComplete ? "text-emerald-400" : "text-violet-400"
+                      }`}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      {document.name}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {(document.file.size / 1024).toFixed(1)} KB • Ready to compare
+                    </p>
+                  </div>
+                  <button
+                    onClick={onRemove}
+                    className="shrink-0 px-4 py-2 text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {document.name}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {(document.file.size / 1024).toFixed(1)} KB
-                  </p>
-                </div>
-                <button
-                  onClick={onRemove}
-                  className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
-                >
-                  Remove
-                </button>
-              </div>
-            </M.div>
-          ) : (
-            <M.div
-              key="uploader"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <DocumentUploader
-                onUpload={onUpload}
-                label={`Drop your ${
-                  step === 1 ? "original" : "modified"
-                } document`}
-                disabled={!isActive && step !== 1}
-              />
-            </M.div>
-          )}
-        </AnimatePresence>
+              </M.div>
+            ) : (
+              <M.div
+                key="uploader"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <DocumentUploader
+                  onUpload={onUpload}
+                  label={`Drop your ${
+                    step === 1 ? "original" : "modified"
+                  } document here`}
+                  disabled={!isActive && step !== 1}
+                />
+              </M.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
-    </div>
+    </M.div>
   );
 }
 
