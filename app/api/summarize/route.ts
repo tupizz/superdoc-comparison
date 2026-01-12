@@ -4,7 +4,7 @@ import {
   SUMMARIZE_SYSTEM_PROMPT,
   type SummarizeRequest,
 } from "@/app/lib/openai";
-import { generateObject } from "ai";
+import { streamObject } from "ai";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -38,24 +38,36 @@ export async function POST(request: Request) {
       ? `Document: ${documentName}\n\nChanges detected:\n${changesText}`
       : `Changes detected:\n${changesText}`;
 
-    // Use Vercel AI SDK with structured output
-    const { object: result } = await generateObject({
+    // Use Vercel AI SDK with streaming structured output
+    const result = streamObject({
       model: openai("gpt-5.2"),
       schema: changeSummarySchema,
       system: SUMMARIZE_SYSTEM_PROMPT,
       prompt: userMessage,
     });
 
-    // Combine all changes into bullet points for easy display
-    const bulletPoints = [
-      ...result.textChanges,
-      ...result.formattingChanges,
-      ...result.structuralChanges,
-    ];
+    // Create a stream that sends partial objects as NDJSON
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Stream partial objects as they're generated
+          for await (const partialObject of result.partialObjectStream) {
+            const jsonLine = JSON.stringify(partialObject) + "\n";
+            controller.enqueue(encoder.encode(jsonLine));
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
 
-    return NextResponse.json({
-      ...result,
-      bulletPoints: bulletPoints.length > 0 ? bulletPoints : [result.overview],
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked",
+      },
     });
   } catch (error) {
     console.error("Error summarizing changes:", error);

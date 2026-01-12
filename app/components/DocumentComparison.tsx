@@ -76,10 +76,13 @@ export default function DocumentComparison({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>("review");
 
-  // AI Summary state
-  const [aiSummary, setAiSummary] = useState<SummarizeResponse | null>(null);
+  // AI Summary state with streaming support
+  const [aiSummary, setAiSummary] = useState<Partial<SummarizeResponse> | null>(
+    null
+  );
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const summary: DiffSummary = computeDiffSummary(changes, formattingChanges);
 
@@ -175,13 +178,15 @@ export default function DocumentComparison({
     if (successCount > 0) setChanges([]);
   }, [changes]);
 
-  // Fetch AI summary
+  // Fetch AI summary with streaming support (NDJSON format)
   const fetchAiSummary = useCallback(
     async (changesToSummarize: ChangeWithPosition[]) => {
       if (changesToSummarize.length === 0) return;
 
       setIsSummaryLoading(true);
+      setIsStreaming(true);
       setSummaryError(null);
+      setAiSummary(null);
 
       try {
         const response = await fetch("/api/summarize", {
@@ -202,14 +207,73 @@ export default function DocumentComparison({
           throw new Error(error.error || "Failed to generate summary");
         }
 
-        const data: SummarizeResponse = await response.json();
-        setAiSummary(data);
+        // Check if the response is a stream (NDJSON)
+        const contentType = response.headers.get("content-type");
+        if (contentType?.includes("application/x-ndjson")) {
+          // Handle NDJSON streaming response
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error("No response body");
+
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete lines (NDJSON format: one JSON per line)
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.trim()) {
+                try {
+                  const partialObject = JSON.parse(line);
+                  setAiSummary({
+                    ...partialObject,
+                    bulletPoints: [
+                      ...(partialObject.textChanges || []),
+                      ...(partialObject.formattingChanges || []),
+                      ...(partialObject.structuralChanges || []),
+                    ],
+                  });
+                } catch {
+                  // Skip malformed lines
+                }
+              }
+            }
+          }
+
+          // Process any remaining data in buffer
+          if (buffer.trim()) {
+            try {
+              const finalObject = JSON.parse(buffer);
+              setAiSummary({
+                ...finalObject,
+                bulletPoints: [
+                  ...(finalObject.textChanges || []),
+                  ...(finalObject.formattingChanges || []),
+                  ...(finalObject.structuralChanges || []),
+                ],
+              });
+            } catch {
+              // Ignore final incomplete line
+            }
+          }
+        } else {
+          // Handle regular JSON response (fallback)
+          const data: SummarizeResponse = await response.json();
+          setAiSummary(data);
+        }
       } catch (err) {
         setSummaryError(
           err instanceof Error ? err.message : "Failed to generate summary"
         );
       } finally {
         setIsSummaryLoading(false);
+        setIsStreaming(false);
       }
     },
     [modifiedName]
@@ -407,6 +471,7 @@ export default function DocumentComparison({
         onReject={handleReject}
         aiSummary={aiSummary}
         isSummaryLoading={isSummaryLoading}
+        isStreaming={isStreaming}
         summaryError={summaryError}
         onRetrySummary={() => fetchAiSummary(changes)}
       />
@@ -527,8 +592,9 @@ interface SidebarProps {
     changeId: string,
     changeType: "insertion" | "deletion" | "replacement"
   ) => void;
-  aiSummary: SummarizeResponse | null;
+  aiSummary: Partial<SummarizeResponse> | null;
   isSummaryLoading: boolean;
+  isStreaming: boolean;
   summaryError: string | null;
   onRetrySummary: () => void;
 }
@@ -546,6 +612,7 @@ function Sidebar({
   onReject,
   aiSummary,
   isSummaryLoading,
+  isStreaming,
   summaryError,
   onRetrySummary,
 }: SidebarProps) {
@@ -694,6 +761,7 @@ function Sidebar({
               <SummaryTab
                 aiSummary={aiSummary}
                 isLoading={isSummaryLoading}
+                isStreaming={isStreaming}
                 error={summaryError}
                 onRetry={onRetrySummary}
                 hasChanges={changes.length > 0}
@@ -843,8 +911,9 @@ function ReviewTab({
 // =============================================================================
 
 interface SummaryTabProps {
-  aiSummary: SummarizeResponse | null;
+  aiSummary: Partial<SummarizeResponse> | null;
   isLoading: boolean;
+  isStreaming: boolean;
   error: string | null;
   onRetry: () => void;
   hasChanges: boolean;
@@ -853,6 +922,7 @@ interface SummaryTabProps {
 function SummaryTab({
   aiSummary,
   isLoading,
+  isStreaming,
   error,
   onRetry,
   hasChanges,
@@ -885,7 +955,8 @@ function SummaryTab({
     );
   }
 
-  if (isLoading) {
+  // Show initial loading state only when no data has arrived yet
+  if (isLoading && !aiSummary) {
     return (
       <M.div
         className="flex flex-col items-center justify-center h-full px-6"
@@ -959,8 +1030,29 @@ function SummaryTab({
     return null;
   }
 
+  // Safely access arrays with fallback to empty arrays
+  const textChanges = aiSummary.textChanges || [];
+  const formattingChangesArr = aiSummary.formattingChanges || [];
+  const structuralChanges = aiSummary.structuralChanges || [];
+
   return (
     <div className="h-full overflow-y-auto">
+      {/* Streaming indicator */}
+      {isStreaming && (
+        <div className="sticky top-0 z-10 px-4 py-2 bg-violet-50 dark:bg-violet-900/30 border-b border-violet-100 dark:border-violet-800/30">
+          <div className="flex items-center gap-2">
+            <M.div
+              className="w-2 h-2 rounded-full bg-violet-500"
+              animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            />
+            <span className="text-xs text-violet-600 dark:text-violet-300">
+              Generating summary...
+            </span>
+          </div>
+        </div>
+      )}
+
       <M.div
         className="p-4 space-y-4"
         initial="hidden"
@@ -1006,35 +1098,39 @@ function SummaryTab({
         )}
 
         {/* Overview */}
-        <M.div
-          className="p-3 bg-zinc-50 dark:bg-zinc-700/50 rounded-lg"
-          variants={{
-            hidden: { opacity: 0, y: 15 },
-            visible: { opacity: 1, y: 0 },
-          }}
-        >
-          <p className="text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed">
-            {aiSummary.overview}
-          </p>
-        </M.div>
+        {aiSummary.overview && (
+          <M.div
+            className="p-3 bg-zinc-50 dark:bg-zinc-700/50 rounded-lg"
+            variants={{
+              hidden: { opacity: 0, y: 15 },
+              visible: { opacity: 1, y: 0 },
+            }}
+          >
+            <p className="text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed">
+              {aiSummary.overview}
+            </p>
+          </M.div>
+        )}
 
         {/* Detailed Summary */}
-        <M.div
-          variants={{
-            hidden: { opacity: 0, y: 15 },
-            visible: { opacity: 1, y: 0 },
-          }}
-        >
-          <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
-            Summary
-          </h4>
-          <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-            {aiSummary.summary}
-          </p>
-        </M.div>
+        {aiSummary.summary && (
+          <M.div
+            variants={{
+              hidden: { opacity: 0, y: 15 },
+              visible: { opacity: 1, y: 0 },
+            }}
+          >
+            <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+              Summary
+            </h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
+              {aiSummary.summary}
+            </p>
+          </M.div>
+        )}
 
         {/* Text Changes */}
-        {aiSummary.textChanges.length > 0 && (
+        {textChanges.length > 0 && (
           <M.div
             variants={{
               hidden: { opacity: 0, y: 15 },
@@ -1045,7 +1141,7 @@ function SummaryTab({
               Text Changes
             </h4>
             <ul className="space-y-1.5">
-              {aiSummary.textChanges.map((change, i) => (
+              {textChanges.map((change, i) => (
                 <M.li
                   key={i}
                   className="flex gap-2 text-sm text-zinc-600 dark:text-zinc-300"
@@ -1064,7 +1160,7 @@ function SummaryTab({
         )}
 
         {/* Formatting Changes */}
-        {aiSummary.formattingChanges.length > 0 && (
+        {formattingChangesArr.length > 0 && (
           <M.div
             variants={{
               hidden: { opacity: 0, y: 15 },
@@ -1075,7 +1171,7 @@ function SummaryTab({
               Formatting Changes
             </h4>
             <ul className="space-y-1.5">
-              {aiSummary.formattingChanges.map((change, i) => (
+              {formattingChangesArr.map((change, i) => (
                 <M.li
                   key={i}
                   className="flex gap-2 text-sm text-zinc-600 dark:text-zinc-300"
@@ -1094,7 +1190,7 @@ function SummaryTab({
         )}
 
         {/* Structural Changes */}
-        {aiSummary.structuralChanges.length > 0 && (
+        {structuralChanges.length > 0 && (
           <M.div
             variants={{
               hidden: { opacity: 0, y: 15 },
@@ -1105,7 +1201,7 @@ function SummaryTab({
               Structural Changes
             </h4>
             <ul className="space-y-1.5">
-              {aiSummary.structuralChanges.map((change, i) => (
+              {structuralChanges.map((change, i) => (
                 <M.li
                   key={i}
                   className="flex gap-2 text-sm text-zinc-600 dark:text-zinc-300"
