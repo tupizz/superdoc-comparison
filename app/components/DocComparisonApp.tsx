@@ -3,11 +3,18 @@
 import {
   ArrowPathIcon,
   ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
   BoltIcon,
   CheckCircleIcon,
+  ClockIcon,
+  CloudArrowUpIcon,
+  CubeTransparentIcon,
+  DocumentDuplicateIcon,
   DocumentTextIcon,
+  EyeIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  UsersIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { AnimatePresence, motion } from "motion/react";
@@ -244,28 +251,267 @@ export default function DocComparisonApp() {
                 )}
               </AnimatePresence>
 
-              {/* Features */}
+              {/* Footer CTA */}
+              <M.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="mt-24 mb-12 text-center"
+              >
+                <p className="text-zinc-500 text-sm">
+                  Ready to compare your documents? Upload your files above to
+                  get started.
+                </p>
+              </M.div>
+
+              {/* Bento Grid Features */}
               <M.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
-                className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto"
+                className="mt-24 max-w-6xl mx-auto"
               >
-                <FeatureCard
-                  icon={BoltIcon}
-                  title="Instant Analysis"
-                  description="See all changes highlighted in seconds with our advanced diff algorithm"
-                />
-                <FeatureCard
-                  icon={SparklesIcon}
-                  title="AI Summary"
-                  description="Get intelligent summaries explaining what changed and why it matters"
-                />
-                <FeatureCard
-                  icon={ShieldCheckIcon}
-                  title="Review & Accept"
-                  description="Accept or reject individual changes with a single click"
-                />
+                <div className="text-center mb-12">
+                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+                    Everything you need for document comparison
+                  </h2>
+                  <p className="text-zinc-400 max-w-2xl mx-auto">
+                    Powerful features designed for modern document workflows
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Large Card - AI Summary */}
+                  <div className="md:col-span-2 md:row-span-2 group relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 border border-violet-500/20 p-8 hover:border-violet-500/40 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-6">
+                        <SparklesIcon className="h-6 w-6 text-white" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-white mb-3">
+                        AI-Powered Summaries
+                      </h3>
+                      <p className="text-zinc-400 leading-relaxed mb-6">
+                        Get intelligent, contextual summaries of all changes
+                        between document versions. Our AI understands the nature
+                        of modifications and explains what changed and why it
+                        matters.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-zinc-800/50 rounded-xl p-3">
+                          <span className="text-2xl font-bold text-violet-400">
+                            Smart
+                          </span>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Context-aware analysis
+                          </p>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-3">
+                          <span className="text-2xl font-bold text-violet-400">
+                            Fast
+                          </span>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Real-time streaming
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instant Analysis */}
+                  <div className="group relative overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800 p-6 hover:border-zinc-700 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4">
+                        <BoltIcon className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Instant Analysis
+                      </h3>
+                      <p className="text-sm text-zinc-500">
+                        See all changes highlighted in seconds with our advanced
+                        diff algorithm
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Track Changes */}
+                  <div className="group relative overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800 p-6 hover:border-zinc-700 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4">
+                        <EyeIcon className="h-5 w-5 text-amber-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Track Changes
+                      </h3>
+                      <p className="text-sm text-zinc-500">
+                        Visual redlining with additions, deletions, and
+                        formatting changes
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Review & Accept */}
+                  <div className="group relative overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800 p-6 hover:border-zinc-700 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-4">
+                        <ShieldCheckIcon className="h-5 w-5 text-sky-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Review & Accept
+                      </h3>
+                      <p className="text-sm text-zinc-500">
+                        Accept or reject individual changes with one click
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Version History */}
+                  <div className="group relative overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800 p-6 hover:border-zinc-700 transition-all">
+                    <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center mb-4">
+                        <ClockIcon className="h-5 w-5 text-rose-400" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Export Results
+                      </h3>
+                      <p className="text-sm text-zinc-500">
+                        Download your reviewed document with accepted changes
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </M.div>
+
+              {/* Stats Section */}
+              <M.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="mt-24 max-w-5xl mx-auto"
+              >
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(120,119,198,0.1),transparent)]" />
+                  <div className="relative px-8 py-12 md:px-16 md:py-16">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+                      <StatItem
+                        value="<1s"
+                        label="Analysis Time"
+                        sublabel="Instant results"
+                      />
+                      <StatItem
+                        value="100%"
+                        label="Format Preserved"
+                        sublabel="Perfect fidelity"
+                      />
+                      <StatItem
+                        value="Word"
+                        label="Native Support"
+                        sublabel=".docx files"
+                      />
+                      <StatItem
+                        value="Free"
+                        label="Open Source"
+                        sublabel="No hidden costs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </M.div>
+
+              {/* About SuperDoc Section */}
+              <M.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                className="mt-24 max-w-6xl mx-auto"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                  {/* Content */}
+                  <div>
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-6">
+                      <CubeTransparentIcon className="h-3.5 w-3.5" />
+                      Powered by SuperDoc
+                    </span>
+                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                      Built on modern document technology
+                    </h2>
+                    <p className="text-zinc-400 leading-relaxed mb-6">
+                      SuperDoc is a modern, open-source DOCX editor built with
+                      vanilla JavaScript. It prioritizes perfect formatting
+                      preservation while maintaining full compatibility with
+                      Microsoft Word.
+                    </p>
+
+                    <div className="space-y-4 mb-8">
+                      <AboutFeature
+                        icon={DocumentDuplicateIcon}
+                        title="Native DOCX Support"
+                        description="Flawless formatting preservation with advanced table handling and tracked changes"
+                      />
+                      <AboutFeature
+                        icon={UsersIcon}
+                        title="Collaboration Ready"
+                        description="Real-time multi-user editing with team-based access controls and commenting"
+                      />
+                      <AboutFeature
+                        icon={CloudArrowUpIcon}
+                        title="Flexible Deployment"
+                        description="Self-hostable, framework-agnostic. Works with React, Vue, Svelte, or vanilla JS"
+                      />
+                    </div>
+
+                    <a
+                      href="https://www.superdoc.dev/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors"
+                    >
+                      Learn more about SuperDoc
+                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                    </a>
+                  </div>
+
+                  {/* Visual */}
+                  <div className="relative">
+                    <div className="absolute -inset-4 bg-gradient-to-r from-violet-500/20 to-indigo-500/20 rounded-3xl blur-2xl opacity-50" />
+                    <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+                      <div className="flex items-center gap-3 mb-6 pb-6 border-b border-zinc-800">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                          <DocumentTextIcon className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">
+                            SuperDoc Editor
+                          </h4>
+                          <p className="text-xs text-zinc-500">
+                            Open-source document technology
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <TrustedByLogo name="Lincoln Center" />
+                        <TrustedByLogo name="Meow Wolf" />
+                        <TrustedByLogo name="Wieden+Kennedy" />
+                      </div>
+
+                      <div className="mt-6 pt-6 border-t border-zinc-800">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-zinc-500">
+                            Trusted by industry leaders
+                          </span>
+                          <span className="text-emerald-400 font-medium">
+                            Enterprise Ready
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </M.div>
             </M.div>
           )}
@@ -472,8 +718,29 @@ function UploadCard({
   );
 }
 
-// Feature Card Component
-function FeatureCard({
+// Stat Item Component
+function StatItem({
+  value,
+  label,
+  sublabel,
+}: {
+  value: string;
+  label: string;
+  sublabel: string;
+}) {
+  return (
+    <div className="text-center">
+      <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent mb-2">
+        {value}
+      </div>
+      <div className="text-sm font-medium text-white mb-1">{label}</div>
+      <div className="text-xs text-zinc-500">{sublabel}</div>
+    </div>
+  );
+}
+
+// About Feature Component
+function AboutFeature({
   icon: Icon,
   title,
   description,
@@ -483,12 +750,28 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="group relative p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-colors">
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center mb-4 group-hover:from-violet-500/20 group-hover:to-indigo-500/20 transition-colors">
+    <div className="flex items-start gap-4">
+      <div className="shrink-0 w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center">
         <Icon className="h-5 w-5 text-violet-400" />
       </div>
-      <h3 className="text-sm font-semibold text-white mb-1">{title}</h3>
-      <p className="text-sm text-zinc-500 leading-relaxed">{description}</p>
+      <div>
+        <h4 className="text-sm font-semibold text-white mb-1">{title}</h4>
+        <p className="text-sm text-zinc-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+// Trusted By Logo Component
+function TrustedByLogo({ name }: { name: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
+        <span className="text-xs font-bold text-zinc-400">
+          {name.charAt(0)}
+        </span>
+      </div>
+      <span className="text-sm text-zinc-400">{name}</span>
     </div>
   );
 }

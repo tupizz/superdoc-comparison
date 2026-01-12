@@ -30,6 +30,8 @@ import {
 } from "@/app/lib/document-diff";
 import type { SummarizeResponse } from "@/app/lib/openai";
 import { useCallback, useEffect, useRef, useState } from "react";
+import ConfirmationModal from "./ui/ConfirmationModal";
+import ProgressBar from "./ui/ProgressBar";
 
 // =============================================================================
 // Types
@@ -84,7 +86,16 @@ export default function DocumentComparison({
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // UI state for modals
+  const [showAcceptAllConfirm, setShowAcceptAllConfirm] = useState(false);
+  const [showRejectAllConfirm, setShowRejectAllConfirm] = useState(false);
+
+  // Track initial change count for progress tracking
+  const [initialChangeCount, setInitialChangeCount] = useState(0);
+
   const summary: DiffSummary = computeDiffSummary(changes, formattingChanges);
+  const totalChanges = changes.length + formattingChanges.length;
+  const reviewedCount = initialChangeCount > 0 ? initialChangeCount - totalChanges : 0;
 
   const handleDownload = useCallback(() => {
     if (!superdocRef.current) return;
@@ -163,6 +174,7 @@ export default function DocumentComparison({
       if (approveChange(editor, change.id, change.type)) successCount++;
     }
     if (successCount > 0) setChanges([]);
+    setShowAcceptAllConfirm(false);
   }, [changes]);
 
   const handleRejectAll = useCallback(() => {
@@ -176,6 +188,7 @@ export default function DocumentComparison({
       if (rejectChange(editor, change.id, change.type)) successCount++;
     }
     if (successCount > 0) setChanges([]);
+    setShowRejectAllConfirm(false);
   }, [changes]);
 
   // Fetch AI summary with streaming support (NDJSON format)
@@ -330,6 +343,9 @@ export default function DocumentComparison({
       );
       setFormattingChanges(formatChanges);
 
+      // Set initial change count for progress tracking
+      setInitialChangeCount(computed.length + formatChanges.length);
+
       setIsLoading(false);
 
       if (superdocRef.current && (computed.length > 0 || formatChanges.length > 0)) {
@@ -430,6 +446,38 @@ export default function DocumentComparison({
 
   return (
     <div className="flex h-full gap-6">
+      {/* Accept All confirmation modal */}
+      <ConfirmationModal
+        isOpen={showAcceptAllConfirm}
+        onClose={() => setShowAcceptAllConfirm(false)}
+        onConfirm={handleAcceptAll}
+        title="Accept All Changes"
+        description={`This will permanently apply ${changes.length} content ${changes.length === 1 ? "change" : "changes"} to the document. This action cannot be undone.`}
+        confirmText="Accept All"
+        variant="success"
+        icon={
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
+          </svg>
+        }
+      />
+
+      {/* Reject All confirmation modal */}
+      <ConfirmationModal
+        isOpen={showRejectAllConfirm}
+        onClose={() => setShowRejectAllConfirm(false)}
+        onConfirm={handleRejectAll}
+        title="Reject All Changes"
+        description={`This will discard ${changes.length} content ${changes.length === 1 ? "change" : "changes"} and revert to the original. This action cannot be undone.`}
+        confirmText="Reject All"
+        variant="danger"
+        icon={
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        }
+      />
+
       <div
         id="superdoc-hidden"
         className="absolute -left-[9999px] w-px h-px overflow-hidden"
@@ -444,8 +492,8 @@ export default function DocumentComparison({
           isLoading={isLoading}
           hasChanges={changes.length > 0}
           onDownload={handleDownload}
-          onAcceptAll={handleAcceptAll}
-          onRejectAll={handleRejectAll}
+          onAcceptAll={() => setShowAcceptAllConfirm(true)}
+          onRejectAll={() => setShowRejectAllConfirm(true)}
         />
         <div
           id="superdoc-toolbar"
@@ -474,6 +522,8 @@ export default function DocumentComparison({
         isStreaming={isStreaming}
         summaryError={summaryError}
         onRetrySummary={() => fetchAiSummary(changes)}
+        initialChangeCount={initialChangeCount}
+        reviewedCount={reviewedCount}
       />
     </div>
   );
@@ -521,7 +571,7 @@ function DocumentHeader({
             </p>
           </div>
           {!isLoading && totalChanges > 0 && (
-            <span className="flex-shrink-0 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2.5 py-1 rounded-full">
+            <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2.5 py-1 rounded-full">
               {totalChanges} {totalChanges === 1 ? "change" : "changes"}
             </span>
           )}
@@ -532,13 +582,13 @@ function DocumentHeader({
             <>
               <button
                 onClick={onAcceptAll}
-                className="px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-md transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md transition-colors"
               >
                 Accept all
               </button>
               <button
                 onClick={onRejectAll}
-                className="px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-md transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
               >
                 Reject all
               </button>
@@ -597,6 +647,8 @@ interface SidebarProps {
   isStreaming: boolean;
   summaryError: string | null;
   onRetrySummary: () => void;
+  initialChangeCount: number;
+  reviewedCount: number;
 }
 
 function Sidebar({
@@ -615,9 +667,22 @@ function Sidebar({
   isStreaming,
   summaryError,
   onRetrySummary,
+  initialChangeCount,
+  reviewedCount,
 }: SidebarProps) {
   return (
     <div className="w-[420px] flex flex-col bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+      {/* Progress bar */}
+      {initialChangeCount > 0 && (
+        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+          <ProgressBar
+            current={reviewedCount}
+            total={initialChangeCount}
+            label="Review progress"
+          />
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 relative">
         {/* Animated tab indicator */}
@@ -808,7 +873,7 @@ function ReviewTab({
   const totalChanges = changes.length + formattingChanges.length;
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" role="region" aria-label="Change review panel">
       <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-700/50">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {isLoading
@@ -927,6 +992,38 @@ function SummaryTab({
   onRetry,
   hasChanges,
 }: SummaryTabProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyToClipboard = useCallback(() => {
+    if (!aiSummary) return;
+
+    const textParts: string[] = [];
+
+    if (aiSummary.documentContext) {
+      textParts.push(`About this document:\n${aiSummary.documentContext}\n`);
+    }
+    if (aiSummary.overview) {
+      textParts.push(`Overview:\n${aiSummary.overview}\n`);
+    }
+    if (aiSummary.summary) {
+      textParts.push(`Summary:\n${aiSummary.summary}\n`);
+    }
+    if (aiSummary.textChanges?.length) {
+      textParts.push(`Text Changes:\n${aiSummary.textChanges.map(c => `• ${c}`).join('\n')}\n`);
+    }
+    if (aiSummary.formattingChanges?.length) {
+      textParts.push(`Formatting Changes:\n${aiSummary.formattingChanges.map(c => `• ${c}`).join('\n')}\n`);
+    }
+    if (aiSummary.structuralChanges?.length) {
+      textParts.push(`Structural Changes:\n${aiSummary.structuralChanges.map(c => `• ${c}`).join('\n')}`);
+    }
+
+    navigator.clipboard.writeText(textParts.join('\n')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [aiSummary]);
+
   if (!hasChanges) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4">
@@ -1037,21 +1134,65 @@ function SummaryTab({
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* Streaming indicator */}
-      {isStreaming && (
-        <div className="sticky top-0 z-10 px-4 py-2 bg-violet-50 dark:bg-violet-900/30 border-b border-violet-100 dark:border-violet-800/30">
-          <div className="flex items-center gap-2">
-            <M.div
-              className="w-2 h-2 rounded-full bg-violet-500"
-              animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <span className="text-xs text-violet-600 dark:text-violet-300">
-              Generating summary...
+      {/* Sticky header with streaming indicator and copy button */}
+      <div className="sticky top-0 z-10 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80">
+        <div className="px-4 py-2 flex items-center justify-between">
+          {isStreaming ? (
+            <div className="flex items-center gap-2">
+              <M.div
+                className="w-2 h-2 rounded-full bg-violet-500"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              />
+              <span className="text-xs text-violet-600 dark:text-violet-300">
+                Generating summary...
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              AI-generated summary
             </span>
-          </div>
+          )}
+          <M.button
+            onClick={handleCopyToClipboard}
+            disabled={isStreaming}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <AnimatePresence mode="wait">
+              {copied ? (
+                <M.svg
+                  key="check"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="w-3.5 h-3.5 text-emerald-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </M.svg>
+              ) : (
+                <M.svg
+                  key="copy"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </M.svg>
+              )}
+            </AnimatePresence>
+            {copied ? "Copied!" : "Copy"}
+          </M.button>
         </div>
-      )}
+      </div>
 
       <M.div
         className="p-4 space-y-4"
@@ -1315,6 +1456,7 @@ function ChangeCard({
             e.stopPropagation();
             onApprove();
           }}
+          aria-label={`Accept change: ${change.type}`}
           className="flex-1 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-300 dark:hover:border-emerald-700 hover:text-emerald-700 dark:hover:text-emerald-300 rounded transition-colors"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -1326,6 +1468,7 @@ function ChangeCard({
             e.stopPropagation();
             onReject();
           }}
+          aria-label={`Reject change: ${change.type}`}
           className="flex-1 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-700 hover:text-red-700 dark:hover:text-red-300 rounded transition-colors"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
