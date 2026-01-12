@@ -41,7 +41,7 @@ When you upload two versions of a document (original and modified), the applicat
 | Feature | Description |
 |---------|-------------|
 | **Visual Diff** | Changes highlighted directly in the document with track changes styling |
-| **AI Summary** | GPT-powered analysis explaining what changed in plain English |
+| **Streaming AI Summary** | GPT-powered analysis with real-time streaming - see results as they generate |
 | **Accept/Reject** | Review changes individually or accept/reject all at once |
 | **Export** | Download the reviewed document with your decisions applied |
 | **No Server Storage** | Documents are processed client-side; nothing is stored on servers |
@@ -129,10 +129,10 @@ flowchart TB
         M --> N[Document with visible track changes]
     end
 
-    subgraph AI["6. AI Summary (Optional)"]
+    subgraph AI["6. AI Summary (Streaming)"]
         K --> O[POST /api/summarize]
-        O --> P[GPT analyzes changes]
-        P --> Q[Structured summary response]
+        O --> P[GPT streams response via NDJSON]
+        P --> Q[UI updates progressively]
     end
 
     subgraph Review["7. User Review"]
@@ -168,12 +168,16 @@ Using the `diff` library, we compare the two texts character-by-character. This 
 #### Step 5: Apply Track Changes
 This is where the magic happens. We translate text positions to ProseMirror positions and add track change marks (`trackInsert`, `trackDelete`) to the document. These marks make changes visible with colored highlighting.
 
-#### Step 6: AI Summary
-The changes are sent to GPT, which returns a structured analysis including:
+#### Step 6: AI Summary (Streaming)
+The changes are sent to GPT via the `/api/summarize` endpoint. The response is **streamed in real-time** using NDJSON (newline-delimited JSON), so users see the summary build up progressively rather than waiting for the entire response.
+
+The streaming response includes:
 - Document context (what type of document is this?)
 - Overview of changes
 - Categorized list of specific changes
 - Human-readable summary
+
+See [`app/api/summarize/README.md`](app/api/summarize/README.md) for technical details on the streaming implementation.
 
 #### Step 7: Review
 Users can click on any change to navigate to it, then accept (keep the change) or reject (revert to original).
